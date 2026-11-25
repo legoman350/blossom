@@ -125,6 +125,52 @@ struct LayoutEngineTests {
             }
         }
 
+        // Every style keeps the basic invariants for 1...8 unconstrained windows.
+        for style in LayoutStyle.allCases {
+            for n in 1...LayoutEngine.maxWindows {
+                let frames = LayoutEngine.frames(count: n, in: area, style: style, gap: gap)
+                check(frames.count == n, "\(style) n=\(n): \(frames.count) frames")
+                check(frames.allSatisfy { inner.contains($0) && $0.width > 0 && $0.height > 0 },
+                      "\(style) n=\(n): a cell escapes or is empty")
+                check(noOverlaps(frames), "\(style) n=\(n): overlap")
+            }
+            check(LayoutEngine.frames(count: 1, in: area, style: style, gap: gap) == [inner], "\(style) n=1 fills")
+        }
+
+        // Master + stack: master on the left at ~60%, the stack shares one column on the right.
+        do {
+            let frames = LayoutEngine.frames(count: 4, in: area, style: .masterStack, gap: gap)
+            let master = frames[0], stack = Array(frames.dropFirst())
+            check(master.minX == inner.minX && master.height == inner.height, "master: full-height left column")
+            check(abs(master.width - (inner.width - gap) * LayoutEngine.masterRatio) <= 1, "master: ~60% width, got \(master.width)")
+            check(Set(stack.map(\.minX)).count == 1 && stack.allSatisfy { $0.maxX == inner.maxX }, "stack: one right column")
+            check(stack.first?.minY == inner.minY && stack.last?.maxY == inner.maxY, "stack: spans full height")
+        }
+
+        // Master + stack honors minimums: a wide stack window takes width from the master.
+        do {
+            var items = Array(repeating: LayoutItem(), count: 3)
+            items[2].minSize = CGSize(width: 700, height: 0)
+            let frames = LayoutEngine.frames(for: items, in: area, style: .masterStack, gap: gap)
+            check(frames[2].width >= 700, "stack min: got \(frames[2].width)")
+            check(noOverlaps(frames), "stack min: overlap")
+        }
+
+        // Master + stack with too many windows for one column falls back to the grid
+        // rather than producing slivers.
+        do {
+            let short = CGRect(x: 0, y: 0, width: 1440, height: 400)
+            let frames = LayoutEngine.frames(count: 8, in: short, style: .masterStack, gap: gap)
+            check(frames.count == 8 && frames.allSatisfy { $0.height >= 60 }, "stack fallback: slivers \(frames)")
+        }
+
+        // Columns: one row, equal widths.
+        do {
+            let frames = LayoutEngine.frames(count: 4, in: area, style: .columns, gap: gap)
+            check(Set(frames.map(\.minY)).count == 1, "columns: single row")
+            check((frames.map(\.width).max() ?? 0) - (frames.map(\.width).min() ?? 0) <= 1, "columns: equal widths")
+        }
+
         // A gap larger than the area leaves no room: produce nothing rather than negative sizes.
         check(LayoutEngine.frames(count: 4, in: CGRect(x: 0, y: 0, width: 20, height: 20), gap: 30).isEmpty,
               "oversized gap should produce no frames")

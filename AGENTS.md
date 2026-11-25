@@ -195,7 +195,10 @@ Per-app rules.
 
 Do not start phase 2 work while phase 1 is unverified on real hardware.
 **Status:** Phase 1 was verified on real hardware on 2026-11-25 (macOS 27.2): tile and
-restore work. Minimum-size reflow (phase 2) is implemented. The rest of phase 2 is open.
+restore work. From phase 2, minimum-size reflow and the layout styles are implemented.
+The styles are Grid, Master + Stack (the frontmost window gets 60%) and Columns, chosen
+from the Layout submenu. Changing style while tiled re-tiles and keeps the original
+snapshot. Still open: multiple displays, configurable gap, per-app exclusion.
 
 ## Prior art — read before writing the layout math
 

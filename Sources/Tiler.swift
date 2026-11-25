@@ -12,6 +12,22 @@ final class Tiler {
 
     var hasSnapshot: Bool { snapshot != nil }
 
+    private static let styleKey = "layoutStyle"
+
+    /// The chosen layout style, remembered across launches.
+    var style: LayoutStyle {
+        get { UserDefaults.standard.string(forKey: Self.styleKey).flatMap(LayoutStyle.init(rawValue:)) ?? .grid }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: Self.styleKey) }
+    }
+
+    /// Switches style. If already tiled, re-tiles straight away in the new style. The
+    /// snapshot keeps each window's ORIGINAL frame, so restore still returns to the layout
+    /// from before the first tile, not the previous style.
+    func setStyle(_ newStyle: LayoutStyle) {
+        style = newStyle
+        if snapshot != nil, Permissions.isTrusted() { tile() }
+    }
+
     func toggle() {
         guard Permissions.isTrusted(prompt: true) else { return }
         if let saved = snapshot {
@@ -43,7 +59,7 @@ final class Tiler {
             LayoutItem(minSize: MinSizeCache.minSize(for: window.bundleID),
                        fixedSize: window.canResize ? nil : window.frame.size)
         }
-        var targets = LayoutEngine.frames(for: items, in: usable, gap: Self.gap)
+        var targets = LayoutEngine.frames(for: items, in: usable, style: style, gap: Self.gap)
         var actual = [CGRect?](repeating: nil, count: windows.count)
 
         // Pass 1: apply, read back, and learn from any window that came back larger than
@@ -62,7 +78,7 @@ final class Tiler {
         // windows get bigger cells and nothing overlaps. Next time the cache makes pass 1
         // right, so this costs extra round-trips only the first time an app clamps.
         if learnedSomething {
-            let retargets = LayoutEngine.frames(for: items, in: usable, gap: Self.gap)
+            let retargets = LayoutEngine.frames(for: items, in: usable, style: style, gap: Self.gap)
             if retargets.count == targets.count {
                 for (i, window) in windows.enumerated() where actual[i] != nil && retargets[i] != targets[i] {
                     actual[i] = AX.setFrame(window.element, retargets[i])
@@ -84,9 +100,14 @@ final class Tiler {
             }
         }
 
-        var saved: [(element: AXUIElement, frame: CGRect)] = []
+        // Re-tiling (a style change while tiled) keeps the frames already in the snapshot:
+        // those are the originals. Only windows tiled for the first time add their current
+        // frame.
+        var saved = snapshot ?? []
         for (i, window) in windows.enumerated() where actual[i] != nil {
-            saved.append((window.element, window.frame))
+            if !saved.contains(where: { CFEqual($0.element, window.element) }) {
+                saved.append((window.element, window.frame))
+            }
         }
 
         // If nothing moved, stay untiled. Otherwise the next press would "restore" nothing

@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // while the menu is open can't fire both the menu item and the global hotkey.
     private let toggleItem = NSMenuItem(title: "", action: #selector(toggleTiling), keyEquivalent: "")
     private let forgetItem = NSMenuItem(title: "Forget Saved Layout", action: #selector(forgetLayout), keyEquivalent: "")
+    private let layoutMenu = NSMenu()
     private let tuckAllItem = NSMenuItem(title: "", action: #selector(toggleTuckAll), keyEquivalent: "")
     private let tuckAppsItem = NSMenuItem(title: "Tuck Apps", action: nil, keyEquivalent: "")
     private let hotkeyWarningItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -29,6 +30,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(toggleItem)
         menu.addItem(forgetItem)
+        let layoutItem = NSMenuItem(title: "Layout", action: nil, keyEquivalent: "")
+        layoutItem.submenu = layoutMenu
+        menu.addItem(layoutItem)
         let resetSizes = NSMenuItem(title: "Reset Learned Window Sizes", action: #selector(resetLearnedSizes), keyEquivalent: "")
         resetSizes.target = self
         menu.addItem(resetSizes)
@@ -58,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func refreshMenu() {
         toggleItem.title = tiler.hasSnapshot ? "Restore Layout  ⌃⌥⌘T" : "Tile Windows  ⌃⌥⌘T"
         forgetItem.isEnabled = tiler.hasSnapshot
+        rebuildLayoutMenu()
 
         tuckAllItem.title = tuck.anyVisible || !tuck.hasTrackedApps ? "Tuck All Away  ⌘⇧H" : "Show All Tucked  ⌘⇧H"
         tuckAllItem.isEnabled = tuck.hasTrackedApps
@@ -101,6 +106,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let hint = NSMenuItem(title: "Or in the Dock: Options → Assign To → All Desktops", action: nil, keyEquivalent: "")
         hint.isEnabled = false
         submenu.addItem(hint)
+    }
+
+    private func rebuildLayoutMenu() {
+        layoutMenu.removeAllItems()
+        for style in LayoutStyle.allCases {
+            let item = NSMenuItem(title: style.title, action: #selector(chooseLayout(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = style.rawValue
+            item.state = style == tiler.style ? .on : .off
+            layoutMenu.addItem(item)
+        }
+    }
+
+    @objc private func chooseLayout(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let style = LayoutStyle(rawValue: raw) else { return }
+        tiler.setStyle(style)
     }
 
     @objc private func toggleTiling() { tiler.toggle() }

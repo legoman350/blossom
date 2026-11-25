@@ -8,8 +8,22 @@ import Foundation
 // Coordinate convention: rows are filled in order of increasing y. Pass a rect with a
 // top-left origin (Accessibility space) so the first item lands in the top-left cell.
 
-enum LayoutStyle {
+enum LayoutStyle: String, CaseIterable {
+    /// Rows of cells, shape chosen to fit minimum sizes and stay close to 4:3.
     case grid
+    /// The first item (the frontmost window) gets a wide left column; the rest stack on
+    /// the right.
+    case masterStack
+    /// Every item side by side in a single row.
+    case columns
+
+    var title: String {
+        switch self {
+        case .grid:        return "Grid"
+        case .masterStack: return "Master + Stack"
+        case .columns:     return "Columns"
+        }
+    }
 }
 
 /// What the layout needs to know about one window.
@@ -29,9 +43,34 @@ enum LayoutEngine {
     /// turns 3 windows on an ultrawide into 3 columns rather than a 2×2 with a hole.
     static let preferredAspect: CGFloat = 4.0 / 3.0
 
+    /// Share of the width the master window gets in `.masterStack`, before minimums.
+    static let masterRatio: CGFloat = 0.6
+
     /// Unconstrained layout: `count` windows with no minimum sizes.
     static func frames(count: Int, in area: CGRect, style: LayoutStyle = .grid, gap: CGFloat) -> [CGRect] {
-        frames(for: Array(repeating: LayoutItem(), count: max(0, count)), in: area, gap: gap)
+        frames(for: Array(repeating: LayoutItem(), count: max(0, count)), in: area, style: style, gap: gap)
+    }
+
+    /// Dispatches on style. Every style honors minimum and fixed sizes the same way, and
+    /// overlaps only as a last resort.
+    static func frames(for items: [LayoutItem], in area: CGRect, style: LayoutStyle, gap rawGap: CGFloat) -> [CGRect] {
+        switch style {
+        case .grid:
+            return frames(for: items, in: area, gap: rawGap)
+        case .columns:
+            let gap = max(0, rawGap)
+            let inner = area.insetBy(dx: gap, dy: gap)
+            guard !items.isEmpty, !inner.isNull, inner.width > 0, inner.height > 0 else { return [] }
+            return layout(items, rows: 1, inner: inner, gap: gap)?.frames ?? []
+        case .masterStack:
+            let gap = max(0, rawGap)
+            let inner = area.insetBy(dx: gap, dy: gap)
+            guard !items.isEmpty, !inner.isNull, inner.width > 0, inner.height > 0 else { return [] }
+            // One window has nothing to stack; fall back to filling the area.
+            guard items.count > 1 else { return frames(for: items, in: area, gap: rawGap) }
+            // Too many windows for a single stack column (slivers): use the grid.
+            return masterStack(items, inner: inner, gap: gap)?.frames ?? frames(for: items, in: area, gap: rawGap)
+        }
     }
 
     /// Rows of variable-width cells. Every row count from 1 to n is tried, with items
@@ -106,6 +145,43 @@ enum LayoutEngine {
             top += height + gap
         }
         return Candidate(frames: frames, overflow: overflow, aspectError: aspectError / CGFloat(n))
+    }
+
+    /// Master on the left, the rest stacked top to bottom on the right.
+    private static func masterStack(_ items: [LayoutItem], inner: CGRect, gap: CGFloat) -> Candidate? {
+        let minW = items.map { max(0, $0.fixedSize?.width ?? $0.minSize.width) }
+        let minH = items.map { max(0, $0.fixedSize?.height ?? $0.minSize.height) }
+        let stack = 1..<items.count
+        let available = inner.width - gap
+
+        // Widths: the master starts at its ratio share, but never below its own minimum,
+        // and gives back width if the stack column needs it.
+        let stackMinW = stack.map { minW[$0] }.max() ?? 0
+        var masterW = max(minW[0], available * masterRatio)
+        var stackW = available - masterW
+        if stackW < stackMinW {
+            stackW = stackMinW
+            masterW = max(minW[0], available - stackW)  // may overflow if both minimums are large
+        }
+        let heights = distribute(inner.height - gap * CGFloat(stack.count - 1), mins: stack.map { minH[$0] })
+        guard masterW > 0, stackW > 0, heights.allSatisfy({ $0 >= 60 }) else { return nil }
+
+        var frames = Array(repeating: CGRect.zero, count: items.count)
+        let masterCell = snapped(left: inner.minX, top: inner.minY,
+                                 right: inner.minX + masterW, bottom: inner.maxY)
+        frames[0] = items[0].fixedSize.map { centered($0, in: masterCell) } ?? masterCell
+
+        let stackLeft = inner.minX + masterW + gap
+        var top = inner.minY
+        for (row, index) in stack.enumerated() {
+            let cell = snapped(left: stackLeft, top: top, right: stackLeft + stackW, bottom: top + heights[row])
+            frames[index] = items[index].fixedSize.map { centered($0, in: cell) } ?? cell
+            top += heights[row] + gap
+        }
+        let overflow = max(0, masterW + gap + stackW - inner.width)
+            + max(0, heights.reduce(0, +) + gap * CGFloat(stack.count - 1) - inner.height)
+            + max(0, minH[0] - inner.height)
+        return Candidate(frames: frames, overflow: overflow, aspectError: 0)
     }
 
     /// Splits `total` so every share is at least its minimum and the rest is as even as
