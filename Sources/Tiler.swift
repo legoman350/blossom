@@ -13,6 +13,15 @@ final class Tiler {
     var hasSnapshot: Bool { snapshot != nil }
 
     private static let styleKey = "layoutStyle"
+    private static let skipTuckAppsKey = "skipTuckAppsWhenTiling"
+
+    /// When on, apps Tuck manages (All Desktops in the Dock, or the manual Tuck list) are
+    /// left out of tiling. Their windows float on every desktop, so giving them a cell on
+    /// one desktop usually isn't what you want. On by default.
+    var skipTuckApps: Bool {
+        get { UserDefaults.standard.object(forKey: Self.skipTuckAppsKey) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: Self.skipTuckAppsKey) }
+    }
 
     /// The chosen layout style, remembered across launches.
     var style: LayoutStyle {
@@ -49,8 +58,11 @@ final class Tiler {
 
         // Phase 1: only the display with keyboard focus. Windows are frontmost first, so if
         // there are more than the cap, the ones buried at the back are left alone.
+        // Filter before the cap, so skipped apps don't use up any of the 8 slots.
+        let excluded = skipTuckApps ? SpacesPrefs.trackedBundleIDs() : []  // lowercased
         let windows = Array(WindowEnumerator.tileableWindows()
             .filter { screenRect.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }
+            .filter { window in !(window.bundleID.map { excluded.contains($0.lowercased()) } ?? false) }
             .prefix(LayoutEngine.maxWindows))
 
         // Minimums known before we start: learned on earlier presses, or the window's own

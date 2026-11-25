@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let toggleItem = NSMenuItem(title: "", action: #selector(toggleTiling), keyEquivalent: "")
     private let forgetItem = NSMenuItem(title: "Forget Saved Layout", action: #selector(forgetLayout), keyEquivalent: "")
     private let layoutMenu = NSMenu()
+    private let skipTuckItem = NSMenuItem(title: "Don't Tile Tuck Apps", action: #selector(toggleSkipTuck), keyEquivalent: "")
     private let tuckAllItem = NSMenuItem(title: "", action: #selector(toggleTuckAll), keyEquivalent: "")
     private let tuckAppsItem = NSMenuItem(title: "Tuck Apps", action: nil, keyEquivalent: "")
     private let hotkeyWarningItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -33,6 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let layoutItem = NSMenuItem(title: "Layout", action: nil, keyEquivalent: "")
         layoutItem.submenu = layoutMenu
         menu.addItem(layoutItem)
+        skipTuckItem.target = self
+        menu.addItem(skipTuckItem)
         let resetSizes = NSMenuItem(title: "Reset Learned Window Sizes", action: #selector(resetLearnedSizes), keyEquivalent: "")
         resetSizes.target = self
         menu.addItem(resetSizes)
@@ -63,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggleItem.title = tiler.hasSnapshot ? "Restore Layout  ⌃⌥⌘T" : "Tile Windows  ⌃⌥⌘T"
         forgetItem.isEnabled = tiler.hasSnapshot
         rebuildLayoutMenu()
+        skipTuckItem.state = tiler.skipTuckApps ? .on : .off
 
         tuckAllItem.title = tuck.anyVisible || !tuck.hasTrackedApps ? "Tuck All Away  ⌘⇧H" : "Show All Tucked  ⌘⇧H"
         tuckAllItem.isEnabled = tuck.hasTrackedApps
@@ -124,6 +128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         tiler.setStyle(style)
     }
 
+    @objc private func toggleSkipTuck() { tiler.skipTuckApps.toggle() }
     @objc private func toggleTiling() { tiler.toggle() }
     @objc private func forgetLayout() { tiler.forgetSnapshot() }
     @objc private func resetLearnedSizes() { MinSizeCache.reset() }
