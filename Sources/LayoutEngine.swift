@@ -1,59 +1,139 @@
 import CoreGraphics
 import Foundation
 
-// PURE layout math. No AppKit, no Accessibility: a count, a rect, a style and a gap go in,
-// and frames come out. This is the only part of the app that can be unit tested, so keep
-// it free of anything that touches live windows.
+// PURE layout math. No AppKit, no Accessibility: items, a rect and a gap go in, and frames
+// come out. This is the only part of the app that can be unit tested, so keep it free of
+// anything that touches live windows.
 //
 // Coordinate convention: rows are filled in order of increasing y. Pass a rect with a
-// top-left origin (Accessibility space) so the first window lands in the top-left cell.
+// top-left origin (Accessibility space) so the first item lands in the top-left cell.
 
 enum LayoutStyle {
     case grid
+}
+
+/// What the layout needs to know about one window.
+struct LayoutItem: Equatable {
+    /// Smallest cell the window fits in. Zero when unknown.
+    var minSize: CGSize = .zero
+    /// Set when the window can't be resized: it gets a cell at least this big and is
+    /// centered in it at exactly this size.
+    var fixedSize: CGSize? = nil
 }
 
 enum LayoutEngine {
     /// Beyond this, cells become useless slivers. Extra windows are left untouched.
     static let maxWindows = 8
 
+    /// Cells closest to this width:height ratio win. 4:3 suits most app windows, and it
+    /// turns 3 windows on an ultrawide into 3 columns rather than a 2×2 with a hole.
+    static let preferredAspect: CGFloat = 4.0 / 3.0
+
+    /// Unconstrained layout: `count` windows with no minimum sizes.
     static func frames(count: Int, in area: CGRect, style: LayoutStyle = .grid, gap: CGFloat) -> [CGRect] {
-        guard count > 0, area.width > 0, area.height > 0 else { return [] }
-        switch style {
-        case .grid: return grid(count: count, area: area, gap: max(0, gap))
-        }
+        frames(for: Array(repeating: LayoutItem(), count: max(0, count)), in: area, gap: gap)
     }
 
-    /// n=1 fills the area, n=2 splits it into side-by-side halves, and anything larger
-    /// uses columns = ceil(sqrt(n)), with as many rows as that needs.
-    static func gridShape(count: Int) -> (columns: Int, rows: Int) {
-        if count <= 1 { return (1, 1) }
-        if count == 2 { return (2, 1) }
-        let columns = Int(Double(count).squareRoot().rounded(.up))
-        let rows = (count + columns - 1) / columns
-        return (columns, rows)
-    }
-
-    private static func grid(count: Int, area: CGRect, gap: CGFloat) -> [CGRect] {
-        let (columns, rows) = gridShape(count: count)
+    /// Rows of variable-width cells. Every row count from 1 to n is tried, with items
+    /// split evenly across rows in order. Each candidate is sized so every item gets at
+    /// least its minimum, and the best one wins:
+    /// 1. no overflow beats overflow (then the least overflow wins), and
+    /// 2. among equals, cells closest to `preferredAspect`.
+    /// If nothing fits, the least-overflowing candidate is returned and windows overlap.
+    /// That's the last resort, not a crash.
+    static func frames(for items: [LayoutItem], in area: CGRect, gap rawGap: CGFloat) -> [CGRect] {
+        let gap = max(0, rawGap)
         // The gap applies around the outside edge too, not only between cells.
         let inner = area.insetBy(dx: gap, dy: gap)
-        let rowHeight = (inner.height - gap * CGFloat(rows - 1)) / CGFloat(rows)
-        guard rowHeight > 0 else { return [] }
+        guard !items.isEmpty, !inner.isNull, inner.width > 0, inner.height > 0 else { return [] }
 
-        var result: [CGRect] = []
+        var best: Candidate?
+        for rows in 1...items.count {
+            guard let candidate = layout(items, rows: rows, inner: inner, gap: gap) else { continue }
+            if best == nil || candidate.isBetter(than: best!) { best = candidate }
+        }
+        return best?.frames ?? []
+    }
+
+    // MARK: Internals
+
+    private struct Candidate {
+        var frames: [CGRect]
+        var overflow: CGFloat    // total px by which minimums exceed the area
+        var aspectError: CGFloat // mean |log(cell aspect / preferred)|
+
+        func isBetter(than other: Candidate) -> Bool {
+            if abs(overflow - other.overflow) > 0.5 { return overflow < other.overflow }
+            return aspectError < other.aspectError
+        }
+    }
+
+    private static func layout(_ items: [LayoutItem], rows: Int, inner: CGRect, gap: CGFloat) -> Candidate? {
+        let n = items.count
+        let minW = items.map { max(0, $0.fixedSize?.width ?? $0.minSize.width) }
+        let minH = items.map { max(0, $0.fixedSize?.height ?? $0.minSize.height) }
+
+        // Balanced split in order; earlier rows take the extra item (3 → [2, 1]).
+        var rowItems: [Range<Int>] = []
+        var start = 0
         for row in 0..<rows {
-            let inRow = min(columns, count - row * columns)
-            // A short last row stretches its cells across the full width instead of
-            // leaving an empty hole in the bottom-right corner.
-            let cellWidth = (inner.width - gap * CGFloat(inRow - 1)) / CGFloat(inRow)
-            guard cellWidth > 0 else { return [] }
-            let top = inner.minY + CGFloat(row) * (rowHeight + gap)
-            for col in 0..<inRow {
-                let left = inner.minX + CGFloat(col) * (cellWidth + gap)
-                result.append(snapped(left: left, top: top, right: left + cellWidth, bottom: top + rowHeight))
+            let count = n / rows + (row < n % rows ? 1 : 0)
+            rowItems.append(start..<(start + count))
+            start += count
+        }
+
+        let heights = distribute(inner.height - gap * CGFloat(rows - 1),
+                                 mins: rowItems.map { r in r.map { minH[$0] }.max() ?? 0 })
+        var overflow = max(0, heights.reduce(0, +) + gap * CGFloat(rows - 1) - inner.height)
+        var frames = Array(repeating: CGRect.zero, count: n)
+        var aspectError: CGFloat = 0
+
+        var top = inner.minY
+        for (row, range) in rowItems.enumerated() {
+            let height = heights[row]
+            let widths = distribute(inner.width - gap * CGFloat(range.count - 1), mins: range.map { minW[$0] })
+            overflow += max(0, widths.reduce(0, +) + gap * CGFloat(range.count - 1) - inner.width)
+
+            var left = inner.minX
+            for (column, index) in range.enumerated() {
+                let width = widths[column]
+                guard width > 0, height > 0 else { return nil }  // no room at all for this shape
+                let cell = snapped(left: left, top: top, right: left + width, bottom: top + height)
+                frames[index] = items[index].fixedSize.map { centered($0, in: cell) } ?? cell
+                aspectError += abs(log(width / height) - log(preferredAspect))
+                left += width + gap
+            }
+            top += height + gap
+        }
+        return Candidate(frames: frames, overflow: overflow, aspectError: aspectError / CGFloat(n))
+    }
+
+    /// Splits `total` so every share is at least its minimum and the rest is as even as
+    /// possible ("water filling"): shares are max(min, level), with the level chosen so the
+    /// shares add up to `total`. If the minimums alone exceed `total`, returns the minimums
+    /// (the caller counts that as overflow).
+    static func distribute(_ total: CGFloat, mins: [CGFloat]) -> [CGFloat] {
+        guard !mins.isEmpty else { return [] }
+        if mins.reduce(0, +) >= total { return mins }
+        var remaining = total
+        var flexible = CGFloat(mins.count)
+        // Largest minimums first: any that sit above the even share keep their minimum and
+        // drop out, raising the share for the rest.
+        for m in mins.sorted(by: >) {
+            if m > remaining / flexible {
+                remaining -= m
+                flexible -= 1
+            } else {
+                break
             }
         }
-        return result
+        let level = remaining / flexible
+        return mins.map { max($0, level) }
+    }
+
+    private static func centered(_ size: CGSize, in cell: CGRect) -> CGRect {
+        let x = cell.midX - size.width / 2, y = cell.midY - size.height / 2
+        return snapped(left: x, top: y, right: x + size.width, bottom: y + size.height)
     }
 
     /// Round each edge rather than origin and size separately, so neighboring cells keep

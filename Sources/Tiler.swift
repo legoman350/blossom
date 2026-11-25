@@ -33,13 +33,59 @@ final class Tiler {
 
         // Phase 1: only the display with keyboard focus. Windows are frontmost first, so if
         // there are more than the cap, the ones buried at the back are left alone.
-        let windows = WindowEnumerator.tileableWindows()
+        let windows = Array(WindowEnumerator.tileableWindows()
             .filter { screenRect.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }
-            .prefix(LayoutEngine.maxWindows)
+            .prefix(LayoutEngine.maxWindows))
 
-        let targets = LayoutEngine.frames(count: windows.count, in: usable, style: .grid, gap: Self.gap)
+        // Minimums known before we start: learned on earlier presses, or the window's own
+        // size if it can't be resized at all.
+        var items = windows.map { window in
+            LayoutItem(minSize: MinSizeCache.minSize(for: window.bundleID),
+                       fixedSize: window.canResize ? nil : window.frame.size)
+        }
+        var targets = LayoutEngine.frames(for: items, in: usable, gap: Self.gap)
+        var actual = [CGRect?](repeating: nil, count: windows.count)
+
+        // Pass 1: apply, read back, and learn from any window that came back larger than
+        // its cell. That's a minimum size the app enforced silently.
+        var learnedSomething = false
+        for (i, window) in windows.enumerated() where i < targets.count {
+            actual[i] = AX.setFrame(window.element, targets[i])
+            guard window.canResize, let got = actual[i], let observed = Self.clampedMinimum(got, asked: targets[i]) else { continue }
+            MinSizeCache.learn(observed, for: window.bundleID)
+            items[i].minSize = CGSize(width: max(items[i].minSize.width, observed.width),
+                                      height: max(items[i].minSize.height, observed.height))
+            learnedSomething = true
+        }
+
+        // Pass 2 (at most once): re-lay out with what we just learned, so the stubborn
+        // windows get bigger cells and nothing overlaps. Next time the cache makes pass 1
+        // right, so this costs extra round-trips only the first time an app clamps.
+        if learnedSomething {
+            let retargets = LayoutEngine.frames(for: items, in: usable, gap: Self.gap)
+            if retargets.count == targets.count {
+                for (i, window) in windows.enumerated() where actual[i] != nil && retargets[i] != targets[i] {
+                    actual[i] = AX.setFrame(window.element, retargets[i])
+                }
+                targets = retargets
+            }
+        }
+
+        // Center windows that came out smaller than their cell: Terminal snapping to its
+        // character grid, or a fixed-size window the engine already centered but the app
+        // nudged. One position write each, no resize.
+        for (i, window) in windows.enumerated() where i < targets.count {
+            guard let got = actual[i],
+                  got.width < targets[i].width - 1 || got.height < targets[i].height - 1 else { continue }
+            let origin = CGPoint(x: (targets[i].midX - got.width / 2).rounded(),
+                                 y: (targets[i].midY - got.height / 2).rounded())
+            if abs(origin.x - got.minX) > 1 || abs(origin.y - got.minY) > 1 {
+                AX.setPosition(window.element, origin)
+            }
+        }
+
         var saved: [(element: AXUIElement, frame: CGRect)] = []
-        for (window, target) in zip(windows, targets) where AX.setFrame(window.element, target) {
+        for (i, window) in windows.enumerated() where actual[i] != nil {
             saved.append((window.element, window.frame))
         }
 
@@ -50,6 +96,15 @@ final class Tiler {
         } else {
             snapshot = saved
         }
+    }
+
+    /// If the window came back more than 2px larger than asked in either dimension, the
+    /// minimum it enforced (0 for the dimension that fit). Smaller is step snapping and
+    /// teaches nothing.
+    private static func clampedMinimum(_ got: CGRect, asked: CGRect) -> CGSize? {
+        let w = got.width > asked.width + 2 ? got.width : 0
+        let h = got.height > asked.height + 2 ? got.height : 0
+        return (w > 0 || h > 0) ? CGSize(width: w, height: h) : nil
     }
 
     private func restore(_ saved: [(element: AXUIElement, frame: CGRect)]) {

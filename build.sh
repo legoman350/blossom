@@ -3,16 +3,28 @@
 # ./build.sh install   build, copy to /Applications, launch
 # ./build.sh test      run LayoutEngine tests
 #
-# SIGN_IDENTITY defaults to ad-hoc ("-"). Ad-hoc grants can go stale after a rebuild,
-# because macOS ties them to the binary's hash. If tiling silently stops working after a
-# rebuild, remove Blossom in System Settings → Privacy & Security → Accessibility and add it
-# again, or set SIGN_IDENTITY to an Apple Development certificate.
+# Signing decides whether the Accessibility grant survives a rebuild:
+#   - Ad-hoc ("-"): macOS ties the grant to the binary's hash, so EVERY rebuild looks like
+#     a new app. The toggle in System Settings stays on but no longer applies, and the app
+#     keeps asking for access.
+#   - Any real certificate: the grant is tied to identifier + certificate and survives
+#     rebuilds. A free self-signed one is enough. Create it once in Keychain Access →
+#     Certificate Assistant → Create a Certificate…, with name "Blossom Dev", identity type
+#     "Self Signed Root" and certificate type "Code Signing".
+# Order: $SIGN_IDENTITY if set, else "Blossom Dev" if it's in the keychain, else ad-hoc.
 set -euo pipefail
 cd "$(dirname "$0")"
 
 APP=Blossom.app
 BUNDLE_ID=dev.blossom.Blossom
-SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+if [[ -z "${SIGN_IDENTITY:-}" ]]; then
+    if security find-certificate -c "Blossom Dev" >/dev/null 2>&1; then
+        SIGN_IDENTITY="Blossom Dev"
+    else
+        SIGN_IDENTITY="-"
+        echo "note: ad-hoc signing; Accessibility must be re-granted after each rebuild (see build.sh header)" >&2
+    fi
+fi
 
 build() {
     rm -rf "$APP"

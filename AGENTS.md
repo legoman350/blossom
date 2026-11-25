@@ -128,8 +128,19 @@ app freezes the whole tiling operation.
 ## Known traps
 
 - **Minimum window sizes silently clamp.** A window with a 600px minimum in a 400px cell
-  overflows and overlaps its neighbor. Read the frame back after writing. Phase 1: accept
-  the overlap. Phase 2: reflow, giving stubborn windows larger cells.
+  overflows and overlaps its neighbor. There is no reliable public way to ask for the
+  minimum: `AXMinimumSize` is missing in most apps, and probing by shrinking to 1×1
+  flickers. So minimums are *learned*:
+  1. `AX.setFrame` returns the read-back frame.
+  2. When it comes back >2px larger than asked, `Tiler` records the size in
+     `MinSizeCache` (per app, only ever grows) and re-lays out once with the new minimums.
+  3. Read-backs that come back *smaller* are step snapping (Terminal) and are centered in
+     the cell, not learned.
+
+  `LayoutEngine.frames(for:)` honors minimums with rows of variable-width cells. It
+  overlaps only when nothing fits.
+- **Some windows move but can't resize** (dialogs, Calculator). They're tiled at their own
+  size, centered in a cell at least that big. Windows that can't even move are skipped.
 - **Full-screen windows cannot be resized.** Detect and skip them.
 - **Speed.** Ten windows is ~30 round-trips, a few hundred milliseconds of visible
   shuffling. Expected. Do not add threading to hide it in phase 1.
@@ -183,6 +194,8 @@ columns). Configurable gap. Per-app exclusion list.
 Per-app rules.
 
 Do not start phase 2 work while phase 1 is unverified on real hardware.
+**Status:** Phase 1 was verified on real hardware on 2026-11-25 (macOS 27.2): tile and
+restore work. Minimum-size reflow (phase 2) is implemented. The rest of phase 2 is open.
 
 ## Prior art — read before writing the layout math
 

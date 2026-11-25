@@ -29,6 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(toggleItem)
         menu.addItem(forgetItem)
+        let resetSizes = NSMenuItem(title: "Reset Learned Window Sizes", action: #selector(resetLearnedSizes), keyEquivalent: "")
+        resetSizes.target = self
+        menu.addItem(resetSizes)
         menu.addItem(.separator())
         menu.addItem(tuckAllItem)
         menu.addItem(tuckAppsItem)
@@ -102,6 +105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleTiling() { tiler.toggle() }
     @objc private func forgetLayout() { tiler.forgetSnapshot() }
+    @objc private func resetLearnedSizes() { MinSizeCache.reset() }
     @objc private func toggleTuckAll() { tuck.toggleAll() }
 
     @objc private func toggleManualTuck(_ sender: NSMenuItem) {

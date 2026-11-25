@@ -15,6 +15,16 @@ struct LayoutEngineTests {
         }
     }
 
+    static func noOverlaps(_ frames: [CGRect]) -> Bool {
+        for i in frames.indices {
+            for j in frames.indices where j > i {
+                let o = frames[i].intersection(frames[j])
+                if !o.isNull && o.width > 0 && o.height > 0 { return false }
+            }
+        }
+        return true
+    }
+
     static func main() {
         let area = CGRect(x: 0, y: 25, width: 1440, height: 875)
         let gap: CGFloat = 8
@@ -34,11 +44,51 @@ struct LayoutEngineTests {
             check(abs(two[0].width - two[1].width) <= 1, "n=2 halves have equal width")
         }
 
-        let shapes: [Int: (Int, Int)] = [1: (1, 1), 2: (2, 1), 3: (2, 2), 4: (2, 2), 5: (3, 2),
-                                         6: (3, 2), 7: (3, 3), 8: (3, 3), 9: (3, 3), 10: (4, 3)]
-        for (n, expected) in shapes {
-            let shape = LayoutEngine.gridShape(count: n)
-            check(shape == expected, "gridShape(\(n)) = \(shape), expected \(expected)")
+        // On a typical laptop screen, unconstrained layouts keep the familiar shapes.
+        let rowCounts: [Int: Int] = [3: 2, 4: 2, 5: 2, 6: 2]
+        for (n, expectedRows) in rowCounts {
+            let rows = Set(LayoutEngine.frames(count: n, in: area, gap: gap).map(\.minY)).count
+            check(rows == expectedRows, "n=\(n) on 1440×875: \(rows) rows, expected \(expectedRows)")
+        }
+
+        // Ultrawide: 3 windows become one row of 3 columns, not a 2×2 with a stretched row.
+        let wide = CGRect(x: 0, y: 0, width: 3440, height: 1440)
+        let wide3 = LayoutEngine.frames(count: 3, in: wide, gap: gap)
+        check(Set(wide3.map(\.minY)).count == 1, "3 windows on an ultrawide should form one row: \(wide3)")
+
+        // distribute(): water filling.
+        check(LayoutEngine.distribute(300, mins: [0, 0, 0]) == [100, 100, 100], "even split")
+        check(LayoutEngine.distribute(300, mins: [200, 0, 0]) == [200, 50, 50], "big minimum keeps its share")
+        check(LayoutEngine.distribute(300, mins: [200, 200]) == [200, 200], "overflow returns the minimums")
+
+        // A stubborn window gets at least its minimum, and nothing overlaps.
+        do {
+            var items = Array(repeating: LayoutItem(), count: 4)
+            items[0].minSize = CGSize(width: 900, height: 300)
+            let frames = LayoutEngine.frames(for: items, in: area, gap: gap)
+            check(frames.count == 4, "min-size: 4 frames")
+            check(frames[0].width >= 900, "min-size: window 0 got \(frames[0].width) wide, needs 900")
+            check(noOverlaps(frames), "min-size: cells overlap \(frames)")
+            check(frames.allSatisfy { inner.contains($0) }, "min-size: a cell escapes the area")
+        }
+
+        // Fixed-size window: centered in a cell at exactly its size, no overlap.
+        do {
+            var items = Array(repeating: LayoutItem(), count: 3)
+            let fixed = CGSize(width: 230, height: 400)
+            items[1].fixedSize = fixed
+            let frames = LayoutEngine.frames(for: items, in: area, gap: gap)
+            check(frames.count == 3, "fixed: 3 frames")
+            check(frames[1].size == fixed, "fixed: size changed to \(frames[1].size)")
+            check(noOverlaps(frames), "fixed: cells overlap \(frames)")
+        }
+
+        // Infeasible: minimums can't all fit. Still n frames with positive sizes, no crash.
+        do {
+            let items = Array(repeating: LayoutItem(minSize: CGSize(width: 1000, height: 700)), count: 4)
+            let frames = LayoutEngine.frames(for: items, in: area, gap: gap)
+            check(frames.count == 4, "infeasible: got \(frames.count) frames")
+            check(frames.allSatisfy { $0.width >= 1000 && $0.height >= 700 }, "infeasible: minimums not honored")
         }
 
         let areas = [

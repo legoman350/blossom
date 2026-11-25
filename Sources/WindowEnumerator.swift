@@ -5,8 +5,12 @@ import ApplicationServices
 struct TileableWindow {
     let element: AXUIElement
     let pid: pid_t
+    let bundleID: String?
     /// Accessibility coordinates: top-left origin on the primary display.
     let frame: CGRect
+    /// Some windows (dialogs, Calculator, utility panels) can move but not resize. They
+    /// still get a cell, at their own size.
+    let canResize: Bool
 }
 
 enum WindowEnumerator {
@@ -28,7 +32,7 @@ enum WindowEnumerator {
                   let boundsDict = entry[kCGWindowBounds as String] as? NSDictionary,
                   let bounds = CGRect(dictionaryRepresentation: boundsDict),
                   bounds.width >= 60, bounds.height >= 60,
-                  NSRunningApplication(processIdentifier: pid)?.activationPolicy == .regular
+                  let app = NSRunningApplication(processIdentifier: pid), app.activationPolicy == .regular
             else { continue }
 
             if axPool[pid] == nil { axPool[pid] = AX.windows(ofPid: pid) }
@@ -37,7 +41,11 @@ enum WindowEnumerator {
             axPool[pid] = pool  // each AX element pairs with at most one CG window
 
             if AX.isFullScreen(match.element) { continue }  // full-screen windows can't be resized
-            result.append(TileableWindow(element: match.element, pid: pid, frame: match.frame))
+            // A window that can't even move is useless to tile. Skip it rather than leave a hole.
+            guard AX.isSettable(match.element, kAXPositionAttribute) else { continue }
+            result.append(TileableWindow(element: match.element, pid: pid, bundleID: app.bundleIdentifier,
+                                         frame: match.frame,
+                                         canResize: AX.isSettable(match.element, kAXSizeAttribute)))
         }
         return result
     }
@@ -97,34 +105,43 @@ enum AX {
         return (value as? Bool) == true
     }
 
-    private static func isSettable(_ element: AXUIElement, _ attribute: String) -> Bool {
+    static func isSettable(_ element: AXUIElement, _ attribute: String) -> Bool {
         var settable = DarwinBoolean(false)
         return AXUIElementIsAttributeSettable(element, attribute as CFString, &settable) == .success && settable.boolValue
     }
 
-    /// Moves and resizes a window. Returns false if the window refused or no longer exists.
+    /// Moves a window, and resizes it too if it allows that. Returns the frame it actually
+    /// ended up with, or nil if it refused to move or no longer exists.
+    ///
+    /// The returned frame can differ from `target`: minimum sizes clamp silently (larger),
+    /// and Terminal-style windows snap to their character grid (slightly smaller). The
+    /// tiler learns from the first and centers the second.
     @discardableResult
-    static func setFrame(_ element: AXUIElement, _ target: CGRect) -> Bool {
+    static func setFrame(_ element: AXUIElement, _ target: CGRect) -> CGRect? {
         AXUIElementSetMessagingTimeout(element, messagingTimeout)
-        guard isSettable(element, kAXPositionAttribute), isSettable(element, kAXSizeAttribute) else { return false }
+        guard isSettable(element, kAXPositionAttribute) else { return nil }
+        let resizable = isSettable(element, kAXSizeAttribute)
 
         var origin = target.origin, size = target.size
-        guard let position = AXValueCreate(.cgPoint, &origin), let dimensions = AXValueCreate(.cgSize, &size) else { return false }
+        guard let position = AXValueCreate(.cgPoint, &origin), let dimensions = AXValueCreate(.cgSize, &size) else { return nil }
 
         // Position, then size, then position AGAIN. This is not superstition: when the new
         // size would push the window past the screen edge at its old position, the window
         // server shoves it back on-screen, so the first position write gets undone. The
         // second write lands it where we asked. Do not "clean up" the duplicate.
-        guard AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, position) == .success else { return false }
-        _ = AXUIElementSetAttributeValue(element, kAXSizeAttribute as CFString, dimensions)
-        _ = AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, position)
-
-        // Minimum sizes clamp silently, so the window may overlap a neighbor. Phase 1 accepts
-        // that; we log it so phase 2's reflow has data to work from.
-        if let actual = frame(of: element),
-           abs(actual.width - target.width) > 2 || abs(actual.height - target.height) > 2 {
-            NSLog("Blossom: window clamped to \(actual.size) (asked for \(target.size))")
+        guard AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, position) == .success else { return nil }
+        if resizable {
+            _ = AXUIElementSetAttributeValue(element, kAXSizeAttribute as CFString, dimensions)
+            _ = AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, position)
         }
-        return true
+        return frame(of: element) ?? target
+    }
+
+    /// Moves a window without resizing it. Used to center a window inside its cell.
+    @discardableResult
+    static func setPosition(_ element: AXUIElement, _ point: CGPoint) -> Bool {
+        var origin = point
+        guard let position = AXValueCreate(.cgPoint, &origin) else { return false }
+        return AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, position) == .success
     }
 }
