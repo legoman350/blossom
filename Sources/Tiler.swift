@@ -6,7 +6,24 @@ import ApplicationServices
 /// The snapshot stays until restored or explicitly forgotten. If the user hand-moves
 /// windows while tiled, restore still puts them back. That's deliberate.
 final class Tiler {
-    static let gap: CGFloat = 8
+    private static let gapKey = "tileGap"
+    static let gapRange: ClosedRange<CGFloat> = 0...12
+
+    /// Space between windows, and between windows and the screen edge, in points. Shared
+    /// by tiling and snapping. Default 8.
+    static var gap: CGFloat {
+        get {
+            let stored = UserDefaults.standard.object(forKey: gapKey) as? Double
+            return min(max(CGFloat(stored ?? 8), gapRange.lowerBound), gapRange.upperBound)
+        }
+        set { UserDefaults.standard.set(Double(newValue.rounded()), forKey: gapKey) }
+    }
+
+    /// Changes the gap; re-tiles straight away if already tiled (see `setStyle`).
+    func setGap(_ gap: CGFloat) {
+        Self.gap = gap
+        if snapshot != nil, Permissions.isTrusted() { tile(aroundFocused: lastTileAroundFocused) }
+    }
 
     private var snapshot: [(element: AXUIElement, frame: CGRect)]?
 
@@ -21,7 +38,7 @@ final class Tiler {
 
     /// How tiling treats floating apps (All Desktops in the Dock, or the manual list).
     var floatMode: FloatMode {
-        get { UserDefaults.standard.string(forKey: Self.floatModeKey).flatMap(FloatMode.init(rawValue:)) ?? .tileAround }
+        get { UserDefaults.standard.string(forKey: Self.floatModeKey).flatMap(FloatMode.init(rawValue:)) ?? .ignore }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: Self.floatModeKey) }
     }
 
@@ -44,8 +61,22 @@ final class Tiler {
     /// change while tiled re-tiles the same way.
     private var lastTileAroundFocused = false
 
-    /// Leave the focused window where it is and tile every other window into the largest
-    /// space beside it. Same snapshot as normal tiling: ⌃⌥T restores everything it moved.
+    /// The Tile Others hotkey: a strict toggle like `toggle()`. Untiled → leave the focused
+    /// window where it is and tile every other window beside it. Tiled (either way) →
+    /// restore. ⌃⌥T and ⌃⌥A restore the same snapshot.
+    func toggleTileOthers() {
+        guard Permissions.isTrusted(prompt: true) else { return }
+        if let saved = snapshot {
+            restore(saved)
+            snapshot = nil
+            lastTileAroundFocused = false
+        } else {
+            tile(aroundFocused: true)
+        }
+    }
+
+    /// Tile Others without the toggle: always (re)tiles, keeping an existing snapshot.
+    /// Used after a snap, where a second snap must re-tile, not undo the layout.
     func tileOthers() {
         guard Permissions.isTrusted(prompt: true) else { return }
         tile(aroundFocused: true)

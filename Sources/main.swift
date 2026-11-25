@@ -50,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
 
         hotkeys.setHandler(for: .tile) { [weak self] in self?.tiler.toggle() }
-        hotkeys.setHandler(for: .tileOthers) { [weak self] in self?.tiler.tileOthers() }
+        hotkeys.setHandler(for: .tileOthers) { [weak self] in self?.tiler.toggleTileOthers() }
         hotkeys.setHandler(for: .tuckAll) { [weak self] in self?.tuck.toggleAll() }
         hotkeys.setHandler(for: .nextLayout) { [weak self] in self?.nextLayout() }
         hotkeys.setHandler(for: .forgetLayout) { [weak self] in self?.tiler.forgetSnapshot() }
@@ -76,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let tiled = tiler.hasSnapshot
         toggleItem.attributedTitle = titled(tiled ? "Restore Layout" : "Tile Windows", .tile)
         tileOthersItem.attributedTitle = titled("Tile Others", .tileOthers)
+        tileOthersItem.isHidden = tiled  // while tiled, "Restore Layout" above covers both keys
         forgetItem.attributedTitle = titled("Forget Saved Layout", .forgetLayout)
         forgetItem.isHidden = !tiled  // only meaningful while tiled
         rebuildLayoutMenu()
@@ -154,7 +155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             [.leftHalf, .rightHalf, .topHalf, .bottomHalf],
             [.topLeft, .topRight, .bottomLeft, .bottomRight],
             [.firstThird, .centerThird, .lastThird, .firstTwoThirds, .lastTwoThirds],
-            [.stretchVertical, .maximize, .center],
+            [.maximize, .center],
         ]
         for (index, group) in groups.enumerated() {
             if index > 0 { submenu.addItem(.separator()) }
@@ -224,7 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func toggleTiling() { tiler.toggle() }
-    @objc private func tileOthers() { tiler.tileOthers() }
+    @objc private func tileOthers() { tiler.toggleTileOthers() }
     @objc private func forgetLayout() { tiler.forgetSnapshot() }
     @objc private func toggleTuckAll() { tuck.toggleAll() }
 

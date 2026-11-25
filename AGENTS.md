@@ -10,13 +10,13 @@ windows are *actually moved*, so the tiled layout is real and the user can keep 
 it indefinitely. The saved snapshot persists until explicitly cleared, so restore stays
 available.
 
-**Tuck (⌘⇧H).** A menu bar tray, merged in from the standalone Tuck app (the original is
+**Tuck (⌃⌥H).** A menu bar tray, merged in from the standalone Tuck app (the original is
 kept in `tuck/` for reference; it is not built). Every floating app gets its own menu bar
 icon. Clicking it hides the app or shows it again, which avoids macOS "auto-swoosh" (the
 desktop switch when you activate an app assigned to None or This Desktop). Tracked apps are
 those assigned to **All Desktops** in the Dock, plus a manual "Floating Apps" list in the main
 menu. All-Desktops windows already exist on every desktop, so Tuck only toggles visibility
-and never moves anything between desktops. ⌘⇧H tucks all floating apps, or shows them all.
+and never moves anything between desktops. ⌃⌥H tucks all floating apps, or shows them all.
 
 **Naming:** apps in that set are **floating apps**; "tuck" is the hide/show action.
 
@@ -156,7 +156,7 @@ app freezes the whole tiling operation.
 - `NSImage.lockFocus` is deprecated — use `NSImage(size:flipped:drawingHandler:)`.
 - Dictionaries: snapshot `Array(dict.keys)` before mutating inside the loop.
 - **Every Carbon hotkey handler sees every hotkey press.** `Hotkey` gives each instance a
-  unique ID and ignores presses that aren't its own. Removing that check makes ⌘⇧H tile too.
+  unique ID and ignores presses that aren't its own. Removing that check makes ⌃⌥H tile too.
 - **Tuck hides per app, not per window.** `hide()` takes everything the app has open.
 - **Finder resists `hide()`** and behaves oddly as a floating app.
 - **Menu bar space is finite.** On notched MacBooks, icons that overflow past the notch
@@ -183,14 +183,13 @@ app freezes the whole tiling operation.
   (the default).
 - **Settings carry over:** on first launch, Tuck settings are imported once from the
   standalone app's `local.tuck.agent` defaults.
-- **Floating windows and tiling:** Floating Windows menu, default *Tile Around Them*.
-  - Floating windows are never tiled or put in the snapshot.
-  - The others tile into `LayoutEngine.freeArea`: the largest rectangle the visible
-    floats leave free.
-  - If that's under 40% of the screen (a float mid-screen), tile full screen and accept
-    the overlap.
-  - Tucked (hidden) floats aren't on screen, so they take no space.
-  - Other modes: *Leave Alone* (tile underneath) and *Tile Like Others*.
+- **Floating windows and tiling:** Settings → Floating windows, default *Leave Alone (Overlap)*.
+  - Floating windows are never tiled or put in the snapshot (except in *Tile Like Others*).
+  - *Leave Alone*: the others tile across the full screen, underneath the floats.
+  - *Tile Around Them*: the others tile into `LayoutEngine.freeArea`, the largest rectangle
+    the visible floats leave free. If that's under 40% of the screen (a float mid-screen),
+    tile full screen and accept the overlap. Tucked (hidden) floats take no space.
+  - *Tile Like Others*: floats are tiled like any other window.
 
 ## Phases
 

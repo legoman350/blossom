@@ -47,11 +47,16 @@ keeps the old one.
 | --- | --- |
 | Tile / Restore | ⌃⌥T |
 | Tile Others | ⌃⌥A |
-| Tuck All / Show All | ⌘⇧H |
-| Next Layout | none |
+| Tuck All / Show All | ⌃⌥H |
+| Next Layout | ⌃⌥N |
 | Forget Saved Layout | none |
 
-The Settings window also holds the Floating Windows mode and *Reset learned window sizes*.
+Every default uses **⌃⌥**. To use different modifier keys for all of them at once (⌃⌘, ⌥⌘,
+⌃⌥⌘ or ⌃⌥⇧), change **Modifier keys** at the top of Settings → Hotkeys. Shortcuts you've
+recorded yourself keep their own keys.
+
+The Settings window also holds the gap between windows (0–12 pt in 1 pt steps, default 8), the Floating
+Windows mode and *Reset learned window sizes*.
 
 ## Snapping
 
@@ -64,7 +69,6 @@ same positions. Change any shortcut under **Settings → Snapping**.
 | Top-left / Top-right / Bottom-left / Bottom-right | ⌃⌥U ⌃⌥I ⌃⌥J ⌃⌥K |
 | Thirds: press again to cycle left → center → right | ⌃⌥D |
 | Two thirds: press again to toggle left ⇄ right | ⌃⌥E |
-| Stretch vertically (keeps position and width) | ⌃⌥⇧↑ |
 | Maximize / Center | ⌃⌥↩ ⌃⌥C |
 
 Turn on *After snapping a window, tile the other windows* (Settings → Snapping) and a
@@ -72,7 +76,8 @@ snap also tiles everything else into the space left. Snap to the left half and t
 fills the right. This doesn't happen after Maximize or Center.
 
 **Top / Bottom half** change only the height. The window keeps its position and width, so a
-left-third window becomes the top-left third.
+left-third window becomes the top-left third. Press ⌃⌥↑ or ⌃⌥↓ again to stretch it to full height,
+and again to go back to the half.
 
 If another window manager already uses these keys, Settings shows them as taken. Pick
 others, or quit the other app.
@@ -82,10 +87,10 @@ others, or quit the other app.
 | Action | Result |
 | --- | --- |
 | **⌃⌥T** | Tile all windows on the current desktop, or restore the saved layout |
-| **⌃⌥A** | Tile Others: keep the focused window where it is and tile the rest beside it. ⌃⌥T restores |
+| **⌃⌥A** | Tile Others: keep the focused window where it is and tile the rest beside it. Press again (or ⌃⌥T) to restore |
 | Menu → Forget Saved Layout | Drop the saved layout so the next press tiles afresh |
 | Menu → Layout | Grid, Master + Stack (frontmost window gets 60%), or Columns |
-| Settings → Floating windows | Tile around floating apps (default), leave them overlapping, or tile them like others |
+| Settings → Floating windows | Leave floating apps alone (default, others may overlap them), tile around them, or tile them like others |
 
 - One window fills the screen, two split it in half, and more use a near-square grid.
 - At most 8 windows are tiled; any beyond that are left alone.
@@ -94,7 +99,7 @@ others, or quit the other app.
   size, centered in a cell.
 - Minimum window sizes are learned per app, and stubborn windows get bigger cells. Windows
   overlap only when nothing fits.
-- Floating apps (below) are never tiled. By default the other windows tile around them.
+- Floating apps (below) are never tiled. By default they're left where they are and other windows may tile underneath them. Choose *Tile Around Them* in Settings to keep the space they use clear.
 
 ## Tuck
 
@@ -115,14 +120,14 @@ Tuck just switches the app between hidden and shown, using only supported APIs.
 | --- | --- |
 | Click an app icon | Tuck the app away, or bring it back to this desktop |
 | Right-click (or ctrl-click) an app icon | Menu: Show/Tuck Away, Tuck All Away, Auto-tuck, new-window option, Refresh |
-| **⌘⇧H** | Tuck all floating apps away, or bring them all back |
+| **⌃⌥H** | Tuck all floating apps away, or bring them all back |
 | Dimmed icon | That app is tucked away (hidden or minimized) |
 
 **Auto-tuck** is set per app: off, when the app loses focus, or when you switch Spaces
 (the default).
 
 Settings from the standalone Tuck app are imported automatically on first launch. Quit the
-old Tuck.app so the two don't both claim ⌘⇧H.
+old Tuck.app so you don't get two icons for every floating app.
 
 ### Known limitations
 

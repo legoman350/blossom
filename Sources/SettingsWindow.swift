@@ -84,6 +84,9 @@ final class SettingsWindowController: NSWindowController {
                                              target: nil, action: nil)
     private let stylePopup = NSPopUpButton()
     private let floatPopup = NSPopUpButton()
+    private let modifierPopup = NSPopUpButton()
+    private let gapSlider = NSSlider()
+    private let gapValue = NSTextField(labelWithString: "")
     private let tilingStatus = SettingsWindowController.helpLabel("")
     private let floatingAppsTab = NSTabViewItem(identifier: "floating")
     private let accessibilityLabel = NSTextField(labelWithString: "")
@@ -138,7 +141,10 @@ final class SettingsWindowController: NSWindowController {
             setStatus(status, taken.isEmpty ? "" : "Taken by another app: \(taken.joined(separator: ", ")). Pick another shortcut.", isError: true)
         }
 
+        modifierPopup.selectItem(at: HotkeyManager.modifierChoices.firstIndex(of: HotkeyManager.baseModifiers) ?? 0)
         autoTileOthersBox.state = tiler.autoTileOthers ? .on : .off
+        gapSlider.doubleValue = Double(Tiler.gap)
+        gapValue.stringValue = "\(Int(Tiler.gap)) pt"
         stylePopup.selectItem(at: LayoutStyle.allCases.firstIndex(of: tiler.style) ?? 0)
         floatPopup.selectItem(at: FloatMode.allCases.firstIndex(of: tiler.floatMode) ?? 0)
         floatingAppsTab.view = buildFloatingAppsPage()  // the app list changes; rebuild each time
@@ -152,7 +158,16 @@ final class SettingsWindowController: NSWindowController {
     // MARK: Pages
 
     private func buildHotkeysPage() -> NSView {
-        var rows = hotkeyRows(HotkeyAction.general, status: hotkeyStatus)
+        for mods in HotkeyManager.modifierChoices {
+            modifierPopup.addItem(withTitle: Shortcut(keyCode: 0, modifiers: mods, key: "").display)
+        }
+        modifierPopup.target = self
+        modifierPopup.action = #selector(modifiersChanged)
+        var rows: [[NSView]] = [
+            [label("Modifier keys:"), modifierPopup, NSGridCell.emptyContentView],
+            [NSGridCell.emptyContentView, Self.helpLabel("Used with every default shortcut, here and on the Snapping tab. Shortcuts you've recorded yourself don't change."), NSGridCell.emptyContentView],
+        ]
+        rows += hotkeyRows(HotkeyAction.general, status: hotkeyStatus)
         let defaults = NSButton(title: "Restore Defaults", target: self, action: #selector(restoreDefaults))
         defaults.bezelStyle = .rounded
         rows.append([NSGridCell.emptyContentView, defaults, NSGridCell.emptyContentView])
@@ -225,11 +240,25 @@ final class SettingsWindowController: NSWindowController {
         let reset = NSButton(title: "Reset", target: self, action: #selector(resetLearnedSizes))
         reset.bezelStyle = .rounded
 
+        gapSlider.minValue = Double(Tiler.gapRange.lowerBound)
+        gapSlider.maxValue = Double(Tiler.gapRange.upperBound)
+        gapSlider.numberOfTickMarks = Int(Tiler.gapRange.upperBound - Tiler.gapRange.lowerBound) + 1  // one per point
+        gapSlider.allowsTickMarkValuesOnly = true
+        gapSlider.isContinuous = true            // the label follows the drag…
+        gapSlider.target = self
+        gapSlider.action = #selector(gapChanged)
+        gapSlider.widthAnchor.constraint(equalToConstant: 200).isActive = true
+        gapValue.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        let gapRow = NSStackView(views: [gapSlider, gapValue])
+        gapRow.spacing = 10
+
         let rows: [[NSView]] = [
             [label("Layout:"), stylePopup],
             [NSGridCell.emptyContentView, Self.helpLabel("Grid fits windows to a near-square grid. Master + Stack gives the frontmost window 60%. Columns puts everything in one row.")],
             [label("Floating windows:"), floatPopup],
             [NSGridCell.emptyContentView, Self.helpLabel("Floating apps are never tiled. “Tile Around Them” keeps other windows out of their way.")],
+            [label("Gap between windows:"), gapRow],
+            [NSGridCell.emptyContentView, Self.helpLabel("Also used for snapping. Changing it while tiled re-tiles straight away.")],
             [label("Learned window sizes:"), reset],
             [NSGridCell.emptyContentView, Self.helpLabel("Blossom remembers each app's minimum window size. Reset if an app's cells look too large.")],
         ]
@@ -422,7 +451,16 @@ final class SettingsWindowController: NSWindowController {
         apply(nil, to: action, status: action.snapPositions == nil ? hotkeyStatus : snapStatus)
     }
 
+    @objc private func modifiersChanged() {
+        let choices = HotkeyManager.modifierChoices
+        guard choices.indices.contains(modifierPopup.indexOfSelectedItem) else { return }
+        hotkeys.setBaseModifiers(choices[modifierPopup.indexOfSelectedItem])
+        refresh()   // shows the new shortcuts, and any now taken by other apps
+        onChange()  // menu titles
+    }
+
     @objc private func restoreDefaults() {
+        HotkeyManager.baseModifiers = HotkeyManager.modifierChoices[0]  // ⌃⌥
         hotkeys.resetToDefaults()
         refresh()
         onChange()
@@ -433,6 +471,14 @@ final class SettingsWindowController: NSWindowController {
         guard LayoutStyle.allCases.indices.contains(index) else { return }
         tiler.setStyle(LayoutStyle.allCases[index])
         onChange()
+    }
+
+    /// Updates the label on every step of the drag, but re-tiles only when the mouse is
+    /// released, so dragging doesn't shuffle windows dozens of times.
+    @objc private func gapChanged() {
+        let gap = CGFloat(gapSlider.doubleValue.rounded())
+        gapValue.stringValue = "\(Int(gap)) pt"
+        if NSApp.currentEvent?.type != .leftMouseDragged { tiler.setGap(gap) }  // click, release, or keyboard
     }
 
     @objc private func floatModeChanged() {

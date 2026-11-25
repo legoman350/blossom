@@ -78,7 +78,6 @@ enum HotkeyAction: String, CaseIterable {
     case snapTopHalf = "snap.topHalf", snapBottomHalf = "snap.bottomHalf"
     case snapTopLeft = "snap.topLeft", snapTopRight = "snap.topRight"
     case snapBottomLeft = "snap.bottomLeft", snapBottomRight = "snap.bottomRight"
-    case snapStretchVertical = "snap.stretchVertical"
     // One key per group: each press moves to the next position in the cycle.
     case snapThirds = "snapCycle.thirds", snapTwoThirds = "snapCycle.twoThirds"
     case snapMaximize = "snap.maximize", snapCenter = "snap.center"
@@ -89,15 +88,20 @@ enum HotkeyAction: String, CaseIterable {
         switch self {
         case .snapThirds:    return [.firstThird, .centerThird, .lastThird]
         case .snapTwoThirds: return [.firstTwoThirds, .lastTwoThirds]
+        // Pressing the top/bottom key again stretches the window to full height.
+        case .snapTopHalf:    return [.topHalf, .stretchVertical]
+        case .snapBottomHalf: return [.bottomHalf, .stretchVertical]
         default:
             guard rawValue.hasPrefix("snap.") else { return nil }
             return SnapPosition(rawValue: String(rawValue.dropFirst("snap.".count))).map { [$0] }
         }
     }
 
-    /// The action whose hotkey reaches `position` (directly or by cycling).
+    /// The action whose hotkey reaches `position`: its own single-position action if it
+    /// has one, otherwise the cycle it belongs to.
     static func covering(_ position: SnapPosition) -> HotkeyAction? {
-        allCases.first { $0.snapPositions?.contains(position) == true }
+        allCases.first { $0.snapPositions?.first == position && $0.snapPositions?.count == 1 }
+            ?? allCases.first { $0.snapPositions?.contains(position) == true }
     }
 
     static var general: [HotkeyAction] { allCases.filter { $0.snapPositions == nil } }
@@ -110,36 +114,38 @@ enum HotkeyAction: String, CaseIterable {
         case .tuckAll:      return "Tuck All / Show All"
         case .nextLayout:   return "Next Layout"
         case .forgetLayout: return "Forget Saved Layout"
+        case .snapTopHalf:    return "Top Half (again: full height)"
+        case .snapBottomHalf: return "Bottom Half (again: full height)"
         case .snapThirds:    return "Thirds (press to cycle)"
         case .snapTwoThirds: return "Two Thirds (press to cycle)"
         default:            return snapPositions?.first?.title ?? rawValue
         }
     }
 
-    /// Snap defaults use ⌃⌥ plus an arrow or a letter laid out like the screen (U I / J K
-    /// for corners), the convention most window snappers share. Thirds and two thirds
-    /// each need only one key, since pressing again cycles.
+    /// Every default is the global modifier combination (Settings → Hotkeys, ⌃⌥ unless
+    /// changed) plus one key: arrows and letters laid out like the screen (U I / J K for
+    /// corners). Thirds and two thirds each need only one key, since pressing again cycles.
     var defaultShortcut: Shortcut? {
-        let ctrlOpt = UInt32(controlKey | optionKey)
+        let base = HotkeyManager.baseModifiers
         func key(_ code: Int, _ name: String, _ mods: UInt32) -> Shortcut { Shortcut(keyCode: UInt32(code), modifiers: mods, key: name) }
         switch self {
-        case .tile:               return key(kVK_ANSI_T, "T", ctrlOpt)
-        case .tileOthers:         return key(kVK_ANSI_A, "A", ctrlOpt)
-        case .tuckAll:            return key(kVK_ANSI_H, "H", UInt32(cmdKey | shiftKey))
-        case .nextLayout, .forgetLayout: return nil
-        case .snapLeftHalf:       return key(kVK_LeftArrow, "←", ctrlOpt)
-        case .snapRightHalf:      return key(kVK_RightArrow, "→", ctrlOpt)
-        case .snapTopHalf:        return key(kVK_UpArrow, "↑", ctrlOpt)
-        case .snapBottomHalf:     return key(kVK_DownArrow, "↓", ctrlOpt)
-        case .snapTopLeft:        return key(kVK_ANSI_U, "U", ctrlOpt)
-        case .snapTopRight:       return key(kVK_ANSI_I, "I", ctrlOpt)
-        case .snapBottomLeft:     return key(kVK_ANSI_J, "J", ctrlOpt)
-        case .snapBottomRight:    return key(kVK_ANSI_K, "K", ctrlOpt)
-        case .snapStretchVertical: return key(kVK_UpArrow, "↑", ctrlOpt | UInt32(shiftKey))
-        case .snapThirds:         return key(kVK_ANSI_D, "D", ctrlOpt)
-        case .snapTwoThirds:      return key(kVK_ANSI_E, "E", ctrlOpt)
-        case .snapMaximize:       return key(kVK_Return, "↩", ctrlOpt)
-        case .snapCenter:         return key(kVK_ANSI_C, "C", ctrlOpt)
+        case .tile:               return key(kVK_ANSI_T, "T", base)
+        case .tileOthers:         return key(kVK_ANSI_A, "A", base)
+        case .tuckAll:            return key(kVK_ANSI_H, "H", base)
+        case .nextLayout:         return key(kVK_ANSI_N, "N", base)
+        case .forgetLayout:       return nil
+        case .snapLeftHalf:       return key(kVK_LeftArrow, "←", base)
+        case .snapRightHalf:      return key(kVK_RightArrow, "→", base)
+        case .snapTopHalf:        return key(kVK_UpArrow, "↑", base)
+        case .snapBottomHalf:     return key(kVK_DownArrow, "↓", base)
+        case .snapTopLeft:        return key(kVK_ANSI_U, "U", base)
+        case .snapTopRight:       return key(kVK_ANSI_I, "I", base)
+        case .snapBottomLeft:     return key(kVK_ANSI_J, "J", base)
+        case .snapBottomRight:    return key(kVK_ANSI_K, "K", base)
+        case .snapThirds:         return key(kVK_ANSI_D, "D", base)
+        case .snapTwoThirds:      return key(kVK_ANSI_E, "E", base)
+        case .snapMaximize:       return key(kVK_Return, "↩", base)
+        case .snapCenter:         return key(kVK_ANSI_C, "C", base)
         }
     }
 }
@@ -151,6 +157,33 @@ final class HotkeyManager {
     enum SetResult { case ok, takenByOtherApp, usedBy(HotkeyAction) }
 
     private static let defaultsKey = "hotkeys"
+    private static let baseModifiersKey = "hotkeyBaseModifiers"
+
+    /// The modifier combinations offered for the defaults. Each needs ⌃, ⌥ or ⌘ so
+    /// the arrows and letters don't swallow ordinary typing.
+    static let modifierChoices: [UInt32] = [
+        UInt32(controlKey | optionKey),
+        UInt32(controlKey | cmdKey),
+        UInt32(optionKey | cmdKey),
+        UInt32(controlKey | optionKey | cmdKey),
+        UInt32(controlKey | optionKey | shiftKey),
+    ]
+
+    /// The modifiers every default shortcut uses. Shortcuts the user recorded themselves
+    /// are stored whole and don't change with this.
+    static var baseModifiers: UInt32 {
+        get {
+            let stored = UInt32(UserDefaults.standard.integer(forKey: baseModifiersKey))
+            return modifierChoices.contains(stored) ? stored : modifierChoices[0]
+        }
+        set { UserDefaults.standard.set(Int(newValue), forKey: baseModifiersKey) }
+    }
+
+    /// Switches the base modifiers and re-registers every hotkey that uses a default.
+    func setBaseModifiers(_ modifiers: UInt32) {
+        Self.baseModifiers = modifiers
+        registerAll()
+    }
     private var handlers: [HotkeyAction: () -> Void] = [:]
     private var registered: [HotkeyAction: Hotkey] = [:]
     /// Actions whose shortcut another app already holds.

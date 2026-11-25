@@ -261,6 +261,15 @@ struct LayoutEngineTests {
             check(next(snap(.lastThird)) == .firstThird, "cycle: last wraps to first")
             // A few points off (Terminal's grid snapping) still counts as being there.
             check(next(snap(.centerThird).insetBy(dx: 4, dy: 3)) == .lastThird, "cycle: tolerance")
+            // Top half → full height → top half, keeping the window's x and width.
+            let vertical: [SnapPosition] = [.topHalf, .stretchVertical]
+            func nextV(_ w: CGRect) -> SnapPosition { LayoutEngine.nextSnap(in: vertical, window: w, area: area, gap: gap) }
+            check(nextV(current) == .topHalf, "cycle: top key starts at top half")
+            check(nextV(snap(.topHalf)) == .stretchVertical, "cycle: top half → full height")
+            check(nextV(snap(.stretchVertical)) == .topHalf, "cycle: full height → top half")
+            check(LayoutEngine.nextSnap(in: [.bottomHalf, .stretchVertical], window: snap(.bottomHalf), area: area, gap: gap)
+                  == .stretchVertical, "cycle: bottom half → full height")
+
             let pair: [SnapPosition] = [.firstTwoThirds, .lastTwoThirds]
             check(LayoutEngine.nextSnap(in: pair, window: snap(.firstTwoThirds), area: area, gap: gap) == .lastTwoThirds,
                   "cycle: two thirds toggles")

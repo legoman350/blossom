@@ -28,7 +28,7 @@ final class TuckController: NSObject {
                            name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
     }
 
-    // MARK: Tuck all / show all (hotkey is owned by HotkeyManager; default ⌘⇧H)
+    // MARK: Tuck all / show all (hotkey is owned by HotkeyManager; default ⌃⌥H)
 
     /// True if any floating app currently has a window on screen. A minimized window counts
     /// as tucked away, not visible.
