@@ -16,8 +16,10 @@ enum LoginItem {
         switch SMAppService.mainApp.status {
         case .enabled:          return .on
         case .requiresApproval: return .needsApproval
-        case .notRegistered:    return .off
-        case .notFound:         return .unavailable
+        // .notFound is what macOS reports for an app that has simply never been
+        // registered, not a real failure: register() still works. Treat it as off.
+        // Genuine failures surface as an error from register() instead.
+        case .notRegistered, .notFound: return .off
         @unknown default:       return .off
         }
     }
