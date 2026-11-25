@@ -49,7 +49,7 @@ enum SnapPosition: String, CaseIterable {
     case leftHalf, rightHalf, topHalf, bottomHalf
     case topLeft, topRight, bottomLeft, bottomRight
     case firstThird, centerThird, lastThird, firstTwoThirds, lastTwoThirds
-    case stretchVertical, maximize, center
+    case stretchVertical, maximize, center, centerTwoThirds, centerHalf
 
     var title: String {
         switch self {
@@ -69,6 +69,8 @@ enum SnapPosition: String, CaseIterable {
         case .stretchVertical: return "Stretch Vertically"
         case .maximize:       return "Maximize"
         case .center:         return "Center"
+        case .centerTwoThirds: return "Center Two Thirds"
+        case .centerHalf:     return "Center Half"
         }
     }
 
@@ -98,6 +100,8 @@ enum SnapPosition: String, CaseIterable {
         case .stretchVertical: return (0, 0, 1, 1)  // x is kept from the window
         case .maximize:       return (0, 0, 1, 1)
         case .center:         return nil
+        case .centerTwoThirds: return (1.0 / 6, 1.0 / 6, 5.0 / 6, 5.0 / 6)
+        case .centerHalf:     return (0.25, 0, 0.75, 1)
         }
     }
 }
@@ -206,14 +210,23 @@ enum LayoutEngine {
 
     /// For a cycling hotkey: the position after the one the window is at now (wrapping),
     /// or the first if it's at none of them. The window's frame is the only state.
+    ///
+    /// A window can match several positions at once: a window at Center Two Thirds is also
+    /// "centered at its own size". The last match counts (cycles list the general position
+    /// first), and steps that wouldn't move the window are skipped, so a cycle never stalls.
     static func nextSnap(in positions: [SnapPosition], window: CGRect, area: CGRect, gap: CGFloat) -> SnapPosition {
         let t = snapMatchTolerance
-        let current = positions.firstIndex { position in
+        func isAt(_ position: SnapPosition) -> Bool {
             let target = snapFrame(position, in: area, gap: gap, window: window)
             return abs(target.minX - window.minX) <= t && abs(target.maxX - window.maxX) <= t
                 && abs(target.minY - window.minY) <= t && abs(target.maxY - window.maxY) <= t
         }
-        return positions[current.map { ($0 + 1) % positions.count } ?? 0]
+        let current = positions.indices.last { isAt(positions[$0]) }
+        var next = current.map { ($0 + 1) % positions.count } ?? 0
+        for _ in positions.indices where isAt(positions[next]) {  // no-op step: skip it
+            next = (next + 1) % positions.count
+        }
+        return positions[next]
     }
 
     /// Free strips narrower or shorter than this are useless for tiling and are dropped.

@@ -155,7 +155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             [.leftHalf, .rightHalf, .topHalf, .bottomHalf],
             [.topLeft, .topRight, .bottomLeft, .bottomRight],
             [.firstThird, .centerThird, .lastThird, .firstTwoThirds, .lastTwoThirds],
-            [.maximize, .center],
+            [.maximize, .center, .centerTwoThirds, .centerHalf],
         ]
         for (index, group) in groups.enumerated() {
             if index > 0 { submenu.addItem(.separator()) }

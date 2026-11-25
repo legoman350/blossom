@@ -79,7 +79,8 @@ same positions. Change any shortcut under **Settings → Snapping**.
 | Top-left / Top-right / Bottom-left / Bottom-right | ⌃⌥U ⌃⌥I ⌃⌥J ⌃⌥K |
 | Thirds: press again to cycle left → center → right | ⌃⌥D |
 | Two thirds: press again to toggle left ⇄ right | ⌃⌥E |
-| Maximize / Center | ⌃⌥↩ ⌃⌥C |
+| Maximize | ⌃⌥↩ |
+| Center: first press keeps the size, then cycles centered ⅔ → ½ width | ⌃⌥C |
 
 Turn on *After snapping a window, tile the other windows* (Settings → Snapping) and a
 snap also tiles everything else into the space left. Snap to the left half and the rest

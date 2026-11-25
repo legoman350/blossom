@@ -270,6 +270,20 @@ struct LayoutEngineTests {
             check(LayoutEngine.nextSnap(in: [.bottomHalf, .stretchVertical], window: snap(.bottomHalf), area: area, gap: gap)
                   == .stretchVertical, "cycle: bottom half → full height")
 
+            // Center: keep size first, then two thirds, half, two thirds… never stalls on
+            // "already centered".
+            let centerCycle: [SnapPosition] = [.center, .centerTwoThirds, .centerHalf]
+            func nextC(_ w: CGRect) -> SnapPosition { LayoutEngine.nextSnap(in: centerCycle, window: w, area: area, gap: gap) }
+            check(nextC(current) == .center, "center cycle: off-center window → center at its size")
+            check(nextC(snap(.center)) == .centerTwoThirds, "center cycle: centered → two thirds")
+            check(nextC(snap(.centerTwoThirds)) == .centerHalf, "center cycle: two thirds → half")
+            check(nextC(snap(.centerHalf)) == .centerTwoThirds, "center cycle: half → two thirds (skips no-op center)")
+            let twoThirdsC = snap(.centerTwoThirds)
+            check(abs(twoThirdsC.midX - inner.midX) <= 1 && abs(twoThirdsC.midY - inner.midY) <= 1, "center two thirds is centered")
+            check(abs(twoThirdsC.width - inner.width * 2 / 3) <= gap + 1, "center two thirds ~2/3 wide")
+            let halfC = snap(.centerHalf)
+            check(abs(halfC.midX - inner.midX) <= 1 && halfC.minY == inner.minY && halfC.maxY == inner.maxY, "center half: centered, full height")
+
             let pair: [SnapPosition] = [.firstTwoThirds, .lastTwoThirds]
             check(LayoutEngine.nextSnap(in: pair, window: snap(.firstTwoThirds), area: area, gap: gap) == .lastTwoThirds,
                   "cycle: two thirds toggles")

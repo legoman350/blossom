@@ -91,6 +91,8 @@ enum HotkeyAction: String, CaseIterable {
         // Pressing the top/bottom key again stretches the window to full height.
         case .snapTopHalf:    return [.topHalf, .stretchVertical]
         case .snapBottomHalf: return [.bottomHalf, .stretchVertical]
+        // First press centers at the current size; further presses resize, still centered.
+        case .snapCenter:     return [.center, .centerTwoThirds, .centerHalf]
         default:
             guard rawValue.hasPrefix("snap.") else { return nil }
             return SnapPosition(rawValue: String(rawValue.dropFirst("snap.".count))).map { [$0] }
@@ -116,6 +118,7 @@ enum HotkeyAction: String, CaseIterable {
         case .forgetLayout: return "Forget Saved Layout"
         case .snapTopHalf:    return "Top Half (again: full height)"
         case .snapBottomHalf: return "Bottom Half (again: full height)"
+        case .snapCenter:     return "Center (again: resize)"
         case .snapThirds:    return "Thirds (press to cycle)"
         case .snapTwoThirds: return "Two Thirds (press to cycle)"
         default:            return snapPositions?.first?.title ?? rawValue
