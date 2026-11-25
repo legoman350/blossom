@@ -135,7 +135,7 @@ app = {
     "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
     # Same signer and identifier as build.sh, so the Accessibility grant covers both builds.
     "CODE_SIGN_IDENTITY": "\"Blossom Dev\"", "CODE_SIGN_STYLE": "Manual", "DEVELOPMENT_TEAM": "\"\"",
-    "COMBINE_HIDPI_IMAGES": "YES", "CURRENT_PROJECT_VERSION": "1", "MARKETING_VERSION": "0.1",
+    "COMBINE_HIDPI_IMAGES": "YES", "CURRENT_PROJECT_VERSION": "1", "MARKETING_VERSION": "0.1.0",
     "ENABLE_HARDENED_RUNTIME": "NO", "GENERATE_INFOPLIST_FILE": "YES",
     "INFOPLIST_KEY_CFBundleDisplayName": "Blossom", "INFOPLIST_KEY_LSApplicationCategoryType": "\"public.app-category.productivity\"",
     "INFOPLIST_KEY_LSUIElement": "YES", "INFOPLIST_KEY_NSHumanReadableCopyright": "\"\"",

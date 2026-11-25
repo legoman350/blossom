@@ -14,6 +14,21 @@ Formerly **Tuck**; the tray app was merged into Blossom and the repo renamed.
 Keywords: window tiling, grid layout, auto-swoosh, all desktops, space switching, multiple
 desktops, menu bar utility, app hider, window management, macOS Spaces
 
+## Install
+
+1. Download **Blossom-x.y.z.zip** from the [Releases](https://github.com/legoman350/blossom/releases)
+   page, unzip it, and drag **Blossom.app** into **Applications**.
+2. Open it. Blossom isn't notarized by Apple (it's a free, self-signed build), so the first
+   time macOS says it can't verify the app. Open **System Settings → Privacy & Security**,
+   scroll down to the message about Blossom, and click **Open Anyway**. You only do this
+   once. Alternatively, in Terminal:
+   `xattr -dr com.apple.quarantine /Applications/Blossom.app`
+3. When asked, allow Blossom in **System Settings → Privacy & Security → Accessibility**.
+   It needs that to move and resize windows.
+
+Blossom lives in the menu bar (the blossom icon); it has no Dock icon. Requires macOS 13
+or later, Apple Silicon or Intel.
+
 ## Build
 
 Requires the Xcode Command Line Tools (`xcode-select --install`).
@@ -22,6 +37,7 @@ Requires the Xcode Command Line Tools (`xcode-select --install`).
 ./build.sh            # builds build/Release/Blossom.app
 ./build.sh install    # builds, copies to /Applications, launches
 ./build.sh test       # runs the layout engine tests
+./build.sh release    # universal build + build/Blossom-<version>.zip for a GitHub release
 ```
 
 Or open **Blossom.xcodeproj** in Xcode and press ⌘R. The *Blossom* scheme builds and runs
