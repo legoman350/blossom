@@ -1,5 +1,4 @@
 import AppKit
-import Carbon.HIToolbox
 
 /// Tuck: a menu bar tray for apps assigned to All Desktops (or added manually).
 ///
@@ -12,10 +11,8 @@ final class TuckController: NSObject {
     private var entries: [String: TrayEntry] = [:]  // canonical (running app's) bundleID -> entry
     private var refreshTimer: Timer?
     private var lastClickAt: TimeInterval = 0
-    private var hotkey: Hotkey?
     private var spaceChangeWorkItem: DispatchWorkItem?
 
-    var hotkeyAvailable: Bool { hotkey != nil }
     var hasFloatingApps: Bool { !entries.isEmpty }
 
     func start() {
@@ -29,13 +26,9 @@ final class TuckController: NSObject {
                            name: NSWorkspace.didDeactivateApplicationNotification, object: nil)
         center.addObserver(self, selector: #selector(activeSpaceChanged(_:)),
                            name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
-
-        hotkey = Hotkey(keyCode: UInt32(kVK_ANSI_H), modifiers: UInt32(cmdKey | shiftKey)) { [weak self] in
-            self?.toggleAll()
-        }
     }
 
-    // MARK: Tuck all / show all (⌘⇧H)
+    // MARK: Tuck all / show all (hotkey is owned by HotkeyManager; default ⌘⇧H)
 
     /// True if any floating app currently has a window on screen. A minimized window counts
     /// as tucked away, not visible.
@@ -223,7 +216,7 @@ final class TuckController: NSObject {
             menu.addItem(.separator())
         }
 
-        let hideAllItem = item("Tuck All Away  ⌘⇧H", #selector(menuHideAll(_:)), nil)
+        let hideAllItem = item("Tuck All Away", #selector(menuHideAll(_:)), nil)
         hideAllItem.isEnabled = !entries.isEmpty
         menu.addItem(hideAllItem)
 

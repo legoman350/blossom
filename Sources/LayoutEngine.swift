@@ -44,6 +44,56 @@ enum FloatMode: String, CaseIterable {
     }
 }
 
+/// Where a single window can be snapped on its screen.
+enum SnapPosition: String, CaseIterable {
+    case leftHalf, rightHalf, topHalf, bottomHalf
+    case topLeft, topRight, bottomLeft, bottomRight
+    case firstThird, centerThird, lastThird, firstTwoThirds, lastTwoThirds
+    case maximize, center
+
+    var title: String {
+        switch self {
+        case .leftHalf:       return "Left Half"
+        case .rightHalf:      return "Right Half"
+        case .topHalf:        return "Top Half"
+        case .bottomHalf:     return "Bottom Half"
+        case .topLeft:        return "Top Left"
+        case .topRight:       return "Top Right"
+        case .bottomLeft:     return "Bottom Left"
+        case .bottomRight:    return "Bottom Right"
+        case .firstThird:     return "Left Third"
+        case .centerThird:    return "Center Third"
+        case .lastThird:      return "Right Third"
+        case .firstTwoThirds: return "Left Two Thirds"
+        case .lastTwoThirds:  return "Right Two Thirds"
+        case .maximize:       return "Maximize"
+        case .center:         return "Center"
+        }
+    }
+
+    /// The fraction of the area covered: (x0, y0, x1, y1), with y increasing downward.
+    /// `.center` has none; it keeps the window's size.
+    var fractions: (CGFloat, CGFloat, CGFloat, CGFloat)? {
+        switch self {
+        case .leftHalf:       return (0, 0, 0.5, 1)
+        case .rightHalf:      return (0.5, 0, 1, 1)
+        case .topHalf:        return (0, 0, 1, 0.5)
+        case .bottomHalf:     return (0, 0.5, 1, 1)
+        case .topLeft:        return (0, 0, 0.5, 0.5)
+        case .topRight:       return (0.5, 0, 1, 0.5)
+        case .bottomLeft:     return (0, 0.5, 0.5, 1)
+        case .bottomRight:    return (0.5, 0.5, 1, 1)
+        case .firstThird:     return (0, 0, 1.0 / 3, 1)
+        case .centerThird:    return (1.0 / 3, 0, 2.0 / 3, 1)
+        case .lastThird:      return (2.0 / 3, 0, 1, 1)
+        case .firstTwoThirds: return (0, 0, 2.0 / 3, 1)
+        case .lastTwoThirds:  return (1.0 / 3, 0, 1, 1)
+        case .maximize:       return (0, 0, 1, 1)
+        case .center:         return nil
+        }
+    }
+}
+
 /// What the layout needs to know about one window.
 struct LayoutItem: Equatable {
     /// Smallest cell the window fits in. Zero when unknown.
@@ -110,6 +160,28 @@ enum LayoutEngine {
             if best == nil || candidate.isBetter(than: best!) { best = candidate }
         }
         return best?.frames ?? []
+    }
+
+    /// The frame for snapping one window. The gap matches tiling: a full gap at the screen
+    /// edges and half a gap on each side of an inner edge. So a left half and a right half
+    /// sit exactly one gap apart, the same as two tiled cells.
+    static func snapFrame(_ position: SnapPosition, in area: CGRect, gap rawGap: CGFloat, windowSize: CGSize) -> CGRect {
+        let gap = max(0, rawGap)
+        let inner = area.insetBy(dx: gap, dy: gap)
+        guard !inner.isNull, inner.width > 0, inner.height > 0 else { return area }
+
+        guard let (x0, y0, x1, y1) = position.fractions else {
+            // Center: keep the size (shrunk to fit if needed), centered in the area.
+            let w = min(windowSize.width, inner.width), h = min(windowSize.height, inner.height)
+            let x = inner.midX - w / 2, y = inner.midY - h / 2
+            return snapped(left: x, top: y, right: x + w, bottom: y + h)
+        }
+        let half = gap / 2
+        let left = inner.minX + inner.width * x0 + (x0 > 0 ? half : 0)
+        let right = inner.minX + inner.width * x1 - (x1 < 1 ? half : 0)
+        let top = inner.minY + inner.height * y0 + (y0 > 0 ? half : 0)
+        let bottom = inner.minY + inner.height * y1 - (y1 < 1 ? half : 0)
+        return snapped(left: left, top: top, right: right, bottom: bottom)
     }
 
     /// Free strips narrower or shorter than this are useless for tiling and are dropped.

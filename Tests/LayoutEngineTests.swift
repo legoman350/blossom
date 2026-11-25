@@ -206,6 +206,36 @@ struct LayoutEngineTests {
             check(LayoutEngine.freeArea(in: usable, avoiding: [usable]) == .zero, "free: fully covered → zero")
         }
 
+        // Snap positions.
+        do {
+            let size = CGSize(width: 600, height: 400)
+            func snap(_ p: SnapPosition) -> CGRect { LayoutEngine.snapFrame(p, in: area, gap: gap, windowSize: size) }
+
+            check(snap(.maximize) == inner, "snap: maximize fills the inset area")
+            let left = snap(.leftHalf), right = snap(.rightHalf)
+            check(left.minX == inner.minX && right.maxX == inner.maxX, "snap: halves reach the edges")
+            check(right.minX - left.maxX == gap, "snap: halves one gap apart, got \(right.minX - left.maxX)")
+            check(left.height == inner.height && abs(left.width - right.width) <= 1, "snap: halves equal and full height")
+            check(snap(.bottomHalf).minY - snap(.topHalf).maxY == gap, "snap: top/bottom one gap apart")
+
+            let corners = [snap(.topLeft), snap(.topRight), snap(.bottomLeft), snap(.bottomRight)]
+            check(noOverlaps(corners), "snap: corners overlap")
+            check(corners[0].minX == inner.minX && corners[0].minY == inner.minY, "snap: top-left in the corner")
+            check(corners[3].maxX == inner.maxX && corners[3].maxY == inner.maxY, "snap: bottom-right in the corner")
+
+            let thirds = [snap(.firstThird), snap(.centerThird), snap(.lastThird)]
+            check(noOverlaps(thirds), "snap: thirds overlap")
+            check(thirds[1].minX - thirds[0].maxX == gap && thirds[2].minX - thirds[1].maxX == gap, "snap: thirds one gap apart")
+            check(snap(.firstTwoThirds).maxX == thirds[1].maxX, "snap: left two-thirds ends where the center third does")
+            check(snap(.lastTwoThirds).minX == thirds[1].minX, "snap: right two-thirds starts where the center third does")
+
+            let centered = snap(.center)
+            check(centered.size == size, "snap: center keeps size")
+            check(abs(centered.midX - inner.midX) <= 1 && abs(centered.midY - inner.midY) <= 1, "snap: center is centered")
+            let huge = LayoutEngine.snapFrame(.center, in: area, gap: gap, windowSize: CGSize(width: 5000, height: 5000))
+            check(huge == inner, "snap: oversized window centered is clamped to the area")
+        }
+
         // A gap larger than the area leaves no room: produce nothing rather than negative sizes.
         check(LayoutEngine.frames(count: 4, in: CGRect(x: 0, y: 0, width: 20, height: 20), gap: 30).isEmpty,
               "oversized gap should produce no frames")

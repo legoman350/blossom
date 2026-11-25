@@ -63,6 +63,9 @@ plainly that it is uncompiled, and ask the user to run the build and paste error
 Sources/
   main.swift             NSApplication setup, accessory activation policy, main menu bar item
   Hotkey.swift           Carbon RegisterEventHotKey wrapper (one instance per hotkey)
+  Shortcuts.swift        Shortcut model, HotkeyAction list, HotkeyManager (owns all hotkeys)
+  SettingsWindow.swift   Settings window (tabs): hotkey recorder, snapping, tiling, floating apps
+  Snap.swift             Snaps the focused window to a half/corner/third (frame math in LayoutEngine)
   Permissions.swift      AXIsProcessTrusted checks and the prompt
   WindowEnumerator.swift Finds tileable windows on the current desktop; AX helpers
   LayoutEngine.swift     PURE functions. No AppKit. Frames in, frames out.

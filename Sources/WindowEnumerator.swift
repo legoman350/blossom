@@ -99,6 +99,20 @@ enum AX {
         return CGRect(origin: origin, size: size)
     }
 
+    /// The focused window of the frontmost app, if any.
+    static func focusedWindow() -> AXUIElement? {
+        let system = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(system, messagingTimeout)
+        var app: CFTypeRef?, window: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(system, kAXFocusedApplicationAttribute as CFString, &app) == .success,
+              let app, CFGetTypeID(app) == AXUIElementGetTypeID() else { return nil }
+        let appElement = app as! AXUIElement
+        AXUIElementSetMessagingTimeout(appElement, messagingTimeout)
+        guard AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &window) == .success,
+              let window, CFGetTypeID(window) == AXUIElementGetTypeID() else { return nil }
+        return (window as! AXUIElement)
+    }
+
     static func isFullScreen(_ element: AXUIElement) -> Bool {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, "AXFullScreen" as CFString, &value) == .success else { return false }

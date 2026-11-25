@@ -36,6 +36,38 @@ new window when the app has none".
 The build is ad-hoc signed. If tiling silently stops working after a rebuild, remove
 Blossom from the Accessibility list and add it again.
 
+## Settings and hotkeys
+
+Choose **Settings…** (⌘,) in Blossom's menu to change hotkeys. Click a field and press
+the new combination: it needs ⌘, ⌃ or ⌥, unless it's an F-key. Esc cancels, and **Clear**
+turns that hotkey off. If another app already owns a combination, Blossom says so and
+keeps the old one.
+
+| Action | Default |
+| --- | --- |
+| Tile / Restore | ⌃⌥⌘T |
+| Tuck All / Show All | ⌘⇧H |
+| Next Layout | none |
+| Forget Saved Layout | none |
+
+The Settings window also holds the Floating Windows mode and *Reset learned window sizes*.
+
+## Snapping
+
+Move the window you're working in to part of its screen. The Snap Window menu has the
+same positions. Change any shortcut under **Settings → Snapping**.
+
+| Position | Default |
+| --- | --- |
+| Left / Right / Top / Bottom half | ⌃⌥← ⌃⌥→ ⌃⌥↑ ⌃⌥↓ |
+| Top-left / Top-right / Bottom-left / Bottom-right | ⌃⌥U ⌃⌥I ⌃⌥J ⌃⌥K |
+| Left / Center / Right third | ⌃⌥D ⌃⌥F ⌃⌥G |
+| Left / Right two thirds | ⌃⌥E ⌃⌥T |
+| Maximize / Center | ⌃⌥↩ ⌃⌥C |
+
+If another window manager already uses these keys, Settings shows them as taken. Pick
+others, or quit the other app.
+
 ## Tiling
 
 | Action | Result |
@@ -43,7 +75,7 @@ Blossom from the Accessibility list and add it again.
 | **⌃⌥⌘T** | Tile all windows on the current desktop, or restore the saved layout |
 | Menu → Forget Saved Layout | Drop the saved layout so the next press tiles afresh |
 | Menu → Layout | Grid, Master + Stack (frontmost window gets 60%), or Columns |
-| Menu → Floating Windows | Tile around floating apps (default), leave them overlapping, or tile them like others |
+| Settings → Floating windows | Tile around floating apps (default), leave them overlapping, or tile them like others |
 
 - One window fills the screen, two split it in half, and more use a near-square grid.
 - At most 8 windows are tiled; any beyond that are left alone.

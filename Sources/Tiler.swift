@@ -174,24 +174,20 @@ final class Tiler {
     /// The screen holding the focused window of the frontmost app. Falls back to
     /// NSScreen.main when there is no focused window, for example on an empty desktop.
     private func focusedScreen() -> NSScreen? {
-        let system = AXUIElementCreateSystemWide()
-        AXUIElementSetMessagingTimeout(system, AX.messagingTimeout)
-        var app: CFTypeRef?, window: CFTypeRef?
-        if AXUIElementCopyAttributeValue(system, kAXFocusedApplicationAttribute as CFString, &app) == .success,
-           let app, CFGetTypeID(app) == AXUIElementGetTypeID(),
-           AXUIElementCopyAttributeValue(app as! AXUIElement, kAXFocusedWindowAttribute as CFString, &window) == .success,
-           let window, CFGetTypeID(window) == AXUIElementGetTypeID(),
-           let frame = AX.frame(of: window as! AXUIElement) {
-            let center = CGPoint(x: frame.midX, y: frame.midY)
-            if let screen = NSScreen.screens.first(where: { Geometry.axRect(fromCocoa: $0.frame).contains(center) }) {
-                return screen
-            }
+        if let window = AX.focusedWindow(), let frame = AX.frame(of: window), let screen = Geometry.screen(containing: frame) {
+            return screen
         }
         return NSScreen.main
     }
 }
 
 enum Geometry {
+    /// The screen holding the center of an Accessibility-space rect.
+    static func screen(containing frame: CGRect) -> NSScreen? {
+        let center = CGPoint(x: frame.midX, y: frame.midY)
+        return NSScreen.screens.first { axRect(fromCocoa: $0.frame).contains(center) }
+    }
+
     /// NSScreen uses a bottom-left origin; Accessibility uses a top-left origin anchored to
     /// the primary display (screens[0], the one with the menu bar). Skip this and windows
     /// land off-screen.

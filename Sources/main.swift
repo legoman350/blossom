@@ -1,58 +1,61 @@
 import AppKit
-import Carbon.HIToolbox
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let tiler = Tiler()
     private let tuck = TuckController()
-    private var tileHotkey: Hotkey?
+    private let hotkeys = HotkeyManager()
+    private var settings: SettingsWindowController?
     private var statusItem: NSStatusItem!
 
-    // Shortcuts are shown in the titles rather than as key equivalents, so a key press
-    // while the menu is open can't fire both the menu item and the global hotkey.
+    // Shortcuts are drawn into the titles, not set as key equivalents: a global hotkey
+    // pressed while the menu is open would otherwise fire twice.
     private let toggleItem = NSMenuItem(title: "", action: #selector(toggleTiling), keyEquivalent: "")
-    private let forgetItem = NSMenuItem(title: "Forget Saved Layout", action: #selector(forgetLayout), keyEquivalent: "")
-    private let layoutMenu = NSMenu()
-    private let floatMenu = NSMenu()
+    private let forgetItem = NSMenuItem(title: "", action: #selector(forgetLayout), keyEquivalent: "")
+    private let layoutItem = NSMenuItem(title: "Layout", action: nil, keyEquivalent: "")
+    private let snapItem = NSMenuItem(title: "Snap Window", action: nil, keyEquivalent: "")
     private let tuckAllItem = NSMenuItem(title: "", action: #selector(toggleTuckAll), keyEquivalent: "")
     private let floatingAppsItem = NSMenuItem(title: "Floating Apps", action: nil, keyEquivalent: "")
-    private let hotkeyWarningItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-    private let permissionItem = NSMenuItem(title: "", action: #selector(openPermissions), keyEquivalent: "")
+    private let permissionItem = NSMenuItem(title: "⚠︎ Grant Accessibility Access…", action: #selector(openPermissions), keyEquivalent: "")
+    private let hotkeyWarningItem = NSMenuItem(title: "", action: #selector(openSettings), keyEquivalent: "")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: "Blossom")
 
+        // Menu, top to bottom: tiling, Tuck, problems (only when there are any), app.
         let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false
-        for item in [toggleItem, forgetItem, tuckAllItem, permissionItem] { item.target = self }
+        layoutItem.submenu = NSMenu()
+        snapItem.submenu = NSMenu()
         floatingAppsItem.submenu = NSMenu()
-        hotkeyWarningItem.isEnabled = false
+        for item in [toggleItem, forgetItem, tuckAllItem, permissionItem, hotkeyWarningItem] { item.target = self }
 
         menu.addItem(toggleItem)
         menu.addItem(forgetItem)
-        let layoutItem = NSMenuItem(title: "Layout", action: nil, keyEquivalent: "")
-        layoutItem.submenu = layoutMenu
         menu.addItem(layoutItem)
-        let floatItem = NSMenuItem(title: "Floating Windows", action: nil, keyEquivalent: "")
-        floatItem.submenu = floatMenu
-        menu.addItem(floatItem)
-        let resetSizes = NSMenuItem(title: "Reset Learned Window Sizes", action: #selector(resetLearnedSizes), keyEquivalent: "")
-        resetSizes.target = self
-        menu.addItem(resetSizes)
+        menu.addItem(snapItem)
         menu.addItem(.separator())
         menu.addItem(tuckAllItem)
         menu.addItem(floatingAppsItem)
         menu.addItem(.separator())
         menu.addItem(permissionItem)
         menu.addItem(hotkeyWarningItem)
-        menu.addItem(.separator())
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
         menu.addItem(NSMenuItem(title: "Quit Blossom", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
 
-        tileHotkey = Hotkey(keyCode: UInt32(kVK_ANSI_T), modifiers: UInt32(controlKey | optionKey | cmdKey)) { [weak self] in
-            self?.tiler.toggle()
+        hotkeys.setHandler(for: .tile) { [weak self] in self?.tiler.toggle() }
+        hotkeys.setHandler(for: .tuckAll) { [weak self] in self?.tuck.toggleAll() }
+        hotkeys.setHandler(for: .nextLayout) { [weak self] in self?.nextLayout() }
+        hotkeys.setHandler(for: .forgetLayout) { [weak self] in self?.tiler.forgetSnapshot() }
+        for action in HotkeyAction.snapping {
+            guard let position = action.snap else { continue }
+            hotkeys.setHandler(for: action) { Snap.focusedWindow(to: position) }
         }
+        hotkeys.registerAll()
         tuck.start()
 
         _ = Permissions.isTrusted(prompt: true)
@@ -64,22 +67,86 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func refreshMenu() {
-        toggleItem.title = tiler.hasSnapshot ? "Restore Layout  ⌃⌥⌘T" : "Tile Windows  ⌃⌥⌘T"
-        forgetItem.isEnabled = tiler.hasSnapshot
+        let tiled = tiler.hasSnapshot
+        toggleItem.attributedTitle = titled(tiled ? "Restore Layout" : "Tile Windows", .tile)
+        forgetItem.attributedTitle = titled("Forget Saved Layout", .forgetLayout)
+        forgetItem.isHidden = !tiled  // only meaningful while tiled
         rebuildLayoutMenu()
-        rebuildFloatMenu()
+        rebuildSnapMenu()
 
-        tuckAllItem.title = tuck.anyVisible || !tuck.hasFloatingApps ? "Tuck All Away  ⌘⇧H" : "Show All Tucked  ⌘⇧H"
-        tuckAllItem.isEnabled = tuck.hasFloatingApps
+        // Tuck All only when there's something to tuck; the app list always stays so apps
+        // can be added by hand.
+        tuckAllItem.attributedTitle = titled(tuck.anyVisible ? "Tuck All Away" : "Show All Tucked", .tuckAll)
+        tuckAllItem.isHidden = !tuck.hasFloatingApps
         rebuildFloatingAppsMenu()
 
-        let taken = [tileHotkey == nil ? "⌃⌥⌘T" : nil, tuck.hotkeyAvailable ? nil : "⌘⇧H"].compactMap { $0 }
+        // Problems appear only when they exist.
+        permissionItem.isHidden = Permissions.isTrusted()
+        let taken = HotkeyAction.allCases.filter { hotkeys.unavailable.contains($0) }
         hotkeyWarningItem.isHidden = taken.isEmpty
-        hotkeyWarningItem.title = "\(taken.joined(separator: " and ")) taken by another app"
+        hotkeyWarningItem.title = "⚠︎ Hotkey taken by another app: \(taken.map(\.title).joined(separator: ", "))…"
+    }
 
-        let trusted = Permissions.isTrusted()
-        permissionItem.title = trusted ? "Accessibility: Granted" : "Grant Accessibility Access…"
-        permissionItem.isEnabled = !trusted
+    /// A menu title with the action's current shortcut right-aligned, like a native item.
+    private func titled(_ text: String, _ action: HotkeyAction) -> NSAttributedString {
+        let font = NSFont.menuFont(ofSize: 0)
+        guard let shortcut = hotkeys.shortcut(for: action) else {
+            return NSAttributedString(string: text, attributes: [.font: font])
+        }
+        let style = NSMutableParagraphStyle()
+        style.tabStops = [NSTextTab(textAlignment: .right, location: 230)]
+        let result = NSMutableAttributedString(string: "\(text)\t", attributes: [.paragraphStyle: style, .font: font])
+        result.append(NSAttributedString(string: shortcut.display, attributes: [
+            .paragraphStyle: style, .font: font, .foregroundColor: NSColor.secondaryLabelColor,
+        ]))
+        return result
+    }
+
+    private func rebuildLayoutMenu() {
+        guard let submenu = layoutItem.submenu else { return }
+        submenu.removeAllItems()
+        for style in LayoutStyle.allCases {
+            let item = NSMenuItem(title: style.title, action: #selector(chooseLayout(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = style.rawValue
+            item.state = style == tiler.style ? .on : .off
+            submenu.addItem(item)
+        }
+        if let shortcut = hotkeys.shortcut(for: .nextLayout) {
+            submenu.addItem(.separator())
+            let hint = NSMenuItem(title: "Next Layout: \(shortcut.display)", action: nil, keyEquivalent: "")
+            hint.isEnabled = false
+            submenu.addItem(hint)
+        }
+    }
+
+    /// Snap positions for the focused window, grouped like the screen: halves, corners,
+    /// thirds, then maximize/center. Clicking Blossom's menu doesn't activate Blossom, so
+    /// "focused window" is still the one you were working in.
+    private func rebuildSnapMenu() {
+        guard let submenu = snapItem.submenu else { return }
+        submenu.removeAllItems()
+        let groups: [[HotkeyAction]] = [
+            [.snapLeftHalf, .snapRightHalf, .snapTopHalf, .snapBottomHalf],
+            [.snapTopLeft, .snapTopRight, .snapBottomLeft, .snapBottomRight],
+            [.snapFirstThird, .snapCenterThird, .snapLastThird, .snapFirstTwoThirds, .snapLastTwoThirds],
+            [.snapMaximize, .snapCenter],
+        ]
+        for (index, group) in groups.enumerated() {
+            if index > 0 { submenu.addItem(.separator()) }
+            for action in group {
+                let item = NSMenuItem(title: "", action: #selector(snapFromMenu(_:)), keyEquivalent: "")
+                item.attributedTitle = titled(action.title, action)
+                item.target = self
+                item.representedObject = action.rawValue
+                submenu.addItem(item)
+            }
+        }
+    }
+
+    @objc private func snapFromMenu(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let position = HotkeyAction(rawValue: raw)?.snap else { return }
+        Snap.focusedWindow(to: position)
     }
 
     /// Running apps, checked when they float. Apps assigned to All Desktops in the Dock
@@ -113,31 +180,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         submenu.addItem(hint)
     }
 
-    private func rebuildLayoutMenu() {
-        layoutMenu.removeAllItems()
-        for style in LayoutStyle.allCases {
-            let item = NSMenuItem(title: style.title, action: #selector(chooseLayout(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = style.rawValue
-            item.state = style == tiler.style ? .on : .off
-            layoutMenu.addItem(item)
-        }
-    }
-
-    private func rebuildFloatMenu() {
-        floatMenu.removeAllItems()
-        for mode in FloatMode.allCases {
-            let item = NSMenuItem(title: mode.title, action: #selector(chooseFloatMode(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = mode.rawValue
-            item.state = mode == tiler.floatMode ? .on : .off
-            floatMenu.addItem(item)
-        }
-    }
-
-    @objc private func chooseFloatMode(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let mode = FloatMode(rawValue: raw) else { return }
-        tiler.setFloatMode(mode)
+    private func nextLayout() {
+        let all = LayoutStyle.allCases
+        tiler.setStyle(all[((all.firstIndex(of: tiler.style) ?? 0) + 1) % all.count])
     }
 
     @objc private func chooseLayout(_ sender: NSMenuItem) {
@@ -147,13 +192,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleTiling() { tiler.toggle() }
     @objc private func forgetLayout() { tiler.forgetSnapshot() }
-    @objc private func resetLearnedSizes() { MinSizeCache.reset() }
     @objc private func toggleTuckAll() { tuck.toggleAll() }
 
     @objc private func toggleManualFloating(_ sender: NSMenuItem) {
         guard let bundleID = sender.representedObject as? String else { return }
         SpacesPrefs.toggleManual(bundleID)
         tuck.sync()
+    }
+
+    @objc private func openSettings() {
+        if settings == nil {
+            settings = SettingsWindowController(hotkeys: hotkeys, tiler: tiler) { [weak self] in self?.refreshMenu() }
+        }
+        settings?.show()
     }
 
     @objc private func openPermissions() {
