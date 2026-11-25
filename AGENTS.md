@@ -4,7 +4,7 @@
 
 ## What it does
 
-**Tiling (⌃⌥⌘T).** One global hotkey tiles every window on the current desktop into a
+**Tiling (⌃⌥T).** One global hotkey tiles every window on the current desktop into a
 grid. Press again to restore the previous layout. Unlike Mission Control / Exposé, the
 windows are *actually moved*, so the tiled layout is real and the user can keep working in
 it indefinitely. The saved snapshot persists until explicitly cleared, so restore stays

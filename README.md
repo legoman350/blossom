@@ -45,7 +45,8 @@ keeps the old one.
 
 | Action | Default |
 | --- | --- |
-| Tile / Restore | ⌃⌥⌘T |
+| Tile / Restore | ⌃⌥T |
+| Tile Others | ⌃⌥A |
 | Tuck All / Show All | ⌘⇧H |
 | Next Layout | none |
 | Forget Saved Layout | none |
@@ -61,9 +62,17 @@ same positions. Change any shortcut under **Settings → Snapping**.
 | --- | --- |
 | Left / Right / Top / Bottom half | ⌃⌥← ⌃⌥→ ⌃⌥↑ ⌃⌥↓ |
 | Top-left / Top-right / Bottom-left / Bottom-right | ⌃⌥U ⌃⌥I ⌃⌥J ⌃⌥K |
-| Left / Center / Right third | ⌃⌥D ⌃⌥F ⌃⌥G |
-| Left / Right two thirds | ⌃⌥E ⌃⌥T |
+| Thirds: press again to cycle left → center → right | ⌃⌥D |
+| Two thirds: press again to toggle left ⇄ right | ⌃⌥E |
+| Stretch vertically (keeps position and width) | ⌃⌥⇧↑ |
 | Maximize / Center | ⌃⌥↩ ⌃⌥C |
+
+Turn on *After snapping a window, tile the other windows* (Settings → Snapping) and a
+snap also tiles everything else into the space left. Snap to the left half and the rest
+fills the right. This doesn't happen after Maximize or Center.
+
+**Top / Bottom half** change only the height. The window keeps its position and width, so a
+left-third window becomes the top-left third.
 
 If another window manager already uses these keys, Settings shows them as taken. Pick
 others, or quit the other app.
@@ -72,7 +81,8 @@ others, or quit the other app.
 
 | Action | Result |
 | --- | --- |
-| **⌃⌥⌘T** | Tile all windows on the current desktop, or restore the saved layout |
+| **⌃⌥T** | Tile all windows on the current desktop, or restore the saved layout |
+| **⌃⌥A** | Tile Others: keep the focused window where it is and tile the rest beside it. ⌃⌥T restores |
 | Menu → Forget Saved Layout | Drop the saved layout so the next press tiles afresh |
 | Menu → Layout | Grid, Master + Stack (frontmost window gets 60%), or Columns |
 | Settings → Floating windows | Tile around floating apps (default), leave them overlapping, or tile them like others |

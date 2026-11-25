@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // Shortcuts are drawn into the titles, not set as key equivalents: a global hotkey
     // pressed while the menu is open would otherwise fire twice.
     private let toggleItem = NSMenuItem(title: "", action: #selector(toggleTiling), keyEquivalent: "")
+    private let tileOthersItem = NSMenuItem(title: "", action: #selector(tileOthers), keyEquivalent: "")
     private let forgetItem = NSMenuItem(title: "", action: #selector(forgetLayout), keyEquivalent: "")
     private let layoutItem = NSMenuItem(title: "Layout", action: nil, keyEquivalent: "")
     private let snapItem = NSMenuItem(title: "Snap Window", action: nil, keyEquivalent: "")
@@ -29,9 +30,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         layoutItem.submenu = NSMenu()
         snapItem.submenu = NSMenu()
         floatingAppsItem.submenu = NSMenu()
-        for item in [toggleItem, forgetItem, tuckAllItem, permissionItem, hotkeyWarningItem] { item.target = self }
+        for item in [toggleItem, tileOthersItem, forgetItem, tuckAllItem, permissionItem, hotkeyWarningItem] { item.target = self }
 
         menu.addItem(toggleItem)
+        menu.addItem(tileOthersItem)
         menu.addItem(forgetItem)
         menu.addItem(layoutItem)
         menu.addItem(snapItem)
@@ -48,12 +50,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
 
         hotkeys.setHandler(for: .tile) { [weak self] in self?.tiler.toggle() }
+        hotkeys.setHandler(for: .tileOthers) { [weak self] in self?.tiler.tileOthers() }
         hotkeys.setHandler(for: .tuckAll) { [weak self] in self?.tuck.toggleAll() }
         hotkeys.setHandler(for: .nextLayout) { [weak self] in self?.nextLayout() }
         hotkeys.setHandler(for: .forgetLayout) { [weak self] in self?.tiler.forgetSnapshot() }
         for action in HotkeyAction.snapping {
-            guard let position = action.snap else { continue }
-            hotkeys.setHandler(for: action) { Snap.focusedWindow(to: position) }
+            guard let positions = action.snapPositions else { continue }
+            hotkeys.setHandler(for: action) { [weak self] in
+                guard let self else { return }
+                self.afterSnap(Snap.focusedWindow(cycling: positions))
+            }
         }
         hotkeys.registerAll()
         tuck.start()
@@ -69,6 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func refreshMenu() {
         let tiled = tiler.hasSnapshot
         toggleItem.attributedTitle = titled(tiled ? "Restore Layout" : "Tile Windows", .tile)
+        tileOthersItem.attributedTitle = titled("Tile Others", .tileOthers)
         forgetItem.attributedTitle = titled("Forget Saved Layout", .forgetLayout)
         forgetItem.isHidden = !tiled  // only meaningful while tiled
         rebuildLayoutMenu()
@@ -88,17 +95,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// A menu title with the action's current shortcut right-aligned, like a native item.
-    private func titled(_ text: String, _ action: HotkeyAction) -> NSAttributedString {
+    ///
+    /// `icon` is embedded in the text itself. On recent macOS a menu item's `image` isn't
+    /// drawn once it has an attributed title, so setting `item.image` shows nothing.
+    private func titled(_ text: String, _ action: HotkeyAction, icon: NSImage? = nil) -> NSAttributedString {
         let font = NSFont.menuFont(ofSize: 0)
-        guard let shortcut = hotkeys.shortcut(for: action) else {
-            return NSAttributedString(string: text, attributes: [.font: font])
-        }
         let style = NSMutableParagraphStyle()
         style.tabStops = [NSTextTab(textAlignment: .right, location: 230)]
-        let result = NSMutableAttributedString(string: "\(text)\t", attributes: [.paragraphStyle: style, .font: font])
-        result.append(NSAttributedString(string: shortcut.display, attributes: [
-            .paragraphStyle: style, .font: font, .foregroundColor: NSColor.secondaryLabelColor,
-        ]))
+        let attributes: [NSAttributedString.Key: Any] = [.paragraphStyle: style, .font: font]
+
+        let result = NSMutableAttributedString()
+        if let icon {
+            let attachment = NSTextAttachment()
+            attachment.image = icon
+            // Center the icon on the text: drop it below the baseline by half the difference.
+            attachment.bounds = NSRect(x: 0, y: (font.capHeight - icon.size.height) / 2,
+                                       width: icon.size.width, height: icon.size.height)
+            result.append(NSAttributedString(attachment: attachment))
+            result.append(NSAttributedString(string: "  ", attributes: attributes))
+        }
+        result.append(NSAttributedString(string: text, attributes: attributes))
+        if let shortcut = hotkeys.shortcut(for: action) {
+            result.append(NSAttributedString(string: "\t", attributes: attributes))
+            result.append(NSAttributedString(string: shortcut.display, attributes: [
+                .paragraphStyle: style, .font: font, .foregroundColor: NSColor.secondaryLabelColor,
+            ]))
+        }
         return result
     }
 
@@ -126,27 +148,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func rebuildSnapMenu() {
         guard let submenu = snapItem.submenu else { return }
         submenu.removeAllItems()
-        let groups: [[HotkeyAction]] = [
-            [.snapLeftHalf, .snapRightHalf, .snapTopHalf, .snapBottomHalf],
-            [.snapTopLeft, .snapTopRight, .snapBottomLeft, .snapBottomRight],
-            [.snapFirstThird, .snapCenterThird, .snapLastThird, .snapFirstTwoThirds, .snapLastTwoThirds],
-            [.snapMaximize, .snapCenter],
+        // Every position is listed for clicking. Thirds share one cycling hotkey, so that
+        // key shows on each of them.
+        let groups: [[SnapPosition]] = [
+            [.leftHalf, .rightHalf, .topHalf, .bottomHalf],
+            [.topLeft, .topRight, .bottomLeft, .bottomRight],
+            [.firstThird, .centerThird, .lastThird, .firstTwoThirds, .lastTwoThirds],
+            [.stretchVertical, .maximize, .center],
         ]
         for (index, group) in groups.enumerated() {
             if index > 0 { submenu.addItem(.separator()) }
-            for action in group {
+            for position in group {
                 let item = NSMenuItem(title: "", action: #selector(snapFromMenu(_:)), keyEquivalent: "")
-                item.attributedTitle = titled(action.title, action)
+                let icon = position.icon(template: false)
+                item.attributedTitle = HotkeyAction.covering(position).map { titled(position.title, $0, icon: icon) }
+                    ?? NSAttributedString(string: position.title)
                 item.target = self
-                item.representedObject = action.rawValue
+                item.representedObject = position.rawValue
                 submenu.addItem(item)
             }
         }
     }
 
     @objc private func snapFromMenu(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let position = HotkeyAction(rawValue: raw)?.snap else { return }
-        Snap.focusedWindow(to: position)
+        guard let raw = sender.representedObject as? String, let position = SnapPosition(rawValue: raw) else { return }
+        afterSnap(Snap.focusedWindow(to: position))
+    }
+
+    /// With "auto tile others" on, a snap is followed by tiling the other windows into the
+    /// space left. Not after Maximize (no space left) or Center (no clean space either side).
+    private func afterSnap(_ position: SnapPosition?) {
+        guard tiler.autoTileOthers, let position, position != .maximize, position != .center else { return }
+        tiler.tileOthers()
     }
 
     /// Running apps, checked when they float. Apps assigned to All Desktops in the Dock
@@ -191,6 +224,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func toggleTiling() { tiler.toggle() }
+    @objc private func tileOthers() { tiler.tileOthers() }
     @objc private func forgetLayout() { tiler.forgetSnapshot() }
     @objc private func toggleTuckAll() { tuck.toggleAll() }
 

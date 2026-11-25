@@ -28,7 +28,27 @@ final class Tiler {
     /// Switches float mode; re-tiles straight away if already tiled (see `setStyle`).
     func setFloatMode(_ mode: FloatMode) {
         floatMode = mode
-        if snapshot != nil, Permissions.isTrusted() { tile() }
+        if snapshot != nil, Permissions.isTrusted() { tile(aroundFocused: lastTileAroundFocused) }
+    }
+
+    private static let autoTileOthersKey = "autoTileOthersAfterSnap"
+
+    /// After snapping a window, tile the other windows into the space it leaves. Off by
+    /// default: snapping on its own shouldn't move windows you didn't touch.
+    var autoTileOthers: Bool {
+        get { UserDefaults.standard.bool(forKey: Self.autoTileOthersKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.autoTileOthersKey) }
+    }
+
+    /// Whether the current tiled state came from "Tile Others", so a style or float-mode
+    /// change while tiled re-tiles the same way.
+    private var lastTileAroundFocused = false
+
+    /// Leave the focused window where it is and tile every other window into the largest
+    /// space beside it. Same snapshot as normal tiling: ⌃⌥T restores everything it moved.
+    func tileOthers() {
+        guard Permissions.isTrusted(prompt: true) else { return }
+        tile(aroundFocused: true)
     }
 
     /// The chosen layout style, remembered across launches.
@@ -42,7 +62,7 @@ final class Tiler {
     /// from before the first tile, not the previous style.
     func setStyle(_ newStyle: LayoutStyle) {
         style = newStyle
-        if snapshot != nil, Permissions.isTrusted() { tile() }
+        if snapshot != nil, Permissions.isTrusted() { tile(aroundFocused: lastTileAroundFocused) }
     }
 
     func toggle() {
@@ -50,8 +70,9 @@ final class Tiler {
         if let saved = snapshot {
             restore(saved)
             snapshot = nil
+            lastTileAroundFocused = false
         } else {
-            tile()
+            tile(aroundFocused: false)
         }
     }
 
@@ -59,7 +80,14 @@ final class Tiler {
         snapshot = nil
     }
 
-    private func tile() {
+    private func tile(aroundFocused: Bool) {
+        // Tile Others: the focused window stays put and acts as an obstacle.
+        let focused = aroundFocused ? AX.focusedWindow() : nil
+        let focusedFrame = focused.flatMap { AX.frame(of: $0) }
+        if aroundFocused && focusedFrame == nil {
+            NSSound.beep()  // nothing focused to tile around
+            return
+        }
         guard let screen = focusedScreen() else { return }
         let screenRect = Geometry.axRect(fromCocoa: screen.frame)
         let usable = Geometry.axRect(fromCocoa: screen.visibleFrame)  // already excludes menu bar and Dock
@@ -73,7 +101,8 @@ final class Tiler {
         // 8 slots. They never enter the snapshot, so restore never moves them either.
         let floatingIDs = floatMode == .tileNormally ? [] : SpacesPrefs.floatingBundleIDs()  // lowercased
         let isFloating = { (w: TileableWindow) in w.bundleID.map { floatingIDs.contains($0.lowercased()) } ?? false }
-        let windows = Array(onScreen.filter { !isFloating($0) }.prefix(LayoutEngine.maxWindows))
+        let isFocused = { (w: TileableWindow) in focused.map { CFEqual($0, w.element) } ?? false }
+        let windows = Array(onScreen.filter { !isFloating($0) && !isFocused($0) }.prefix(LayoutEngine.maxWindows))
 
         // Tile around: lay out in the largest rectangle the floating windows leave free.
         // Tucked (hidden) or minimized floats aren't on screen, so they don't take space.
@@ -87,6 +116,25 @@ final class Tiler {
                 NSLog("Blossom: floating window leaves too little room; tiling full screen")
             }
         }
+
+        // Tile Others: the focused window must never be covered. Avoid it together with
+        // the floats if that leaves room; otherwise avoid just the focused window. If even
+        // that leaves nothing usable (the focused window is maximized), do nothing.
+        if let focusedFrame {
+            let floats = floatMode == .tileAround ? onScreen.filter(isFloating).map(\.frame) : []
+            let withFloats = LayoutEngine.freeArea(in: usable, avoiding: floats + [focusedFrame])
+            let focusedOnly = LayoutEngine.freeArea(in: usable, avoiding: [focusedFrame])
+            if withFloats.width * withFloats.height >= Self.minFreeShare * focusedOnly.width * focusedOnly.height,
+               withFloats.width > 0 {
+                area = withFloats
+            } else if focusedOnly.width > 0 {
+                area = focusedOnly
+            } else {
+                NSSound.beep()
+                return
+            }
+        }
+        lastTileAroundFocused = aroundFocused
 
         // Minimums known before we start: learned on earlier presses, or the window's own
         // size if it can't be resized at all.

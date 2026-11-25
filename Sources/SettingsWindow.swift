@@ -80,6 +80,8 @@ final class SettingsWindowController: NSWindowController {
     private var fields: [HotkeyAction: ShortcutField] = [:]
     private let hotkeyStatus = SettingsWindowController.helpLabel("")
     private let snapStatus = SettingsWindowController.helpLabel("")
+    private let autoTileOthersBox = NSButton(checkboxWithTitle: "After snapping a window, tile the other windows into the space left",
+                                             target: nil, action: nil)
     private let stylePopup = NSPopUpButton()
     private let floatPopup = NSPopUpButton()
     private let tilingStatus = SettingsWindowController.helpLabel("")
@@ -136,6 +138,7 @@ final class SettingsWindowController: NSWindowController {
             setStatus(status, taken.isEmpty ? "" : "Taken by another app: \(taken.joined(separator: ", ")). Pick another shortcut.", isError: true)
         }
 
+        autoTileOthersBox.state = tiler.autoTileOthers ? .on : .off
         stylePopup.selectItem(at: LayoutStyle.allCases.firstIndex(of: tiler.style) ?? 0)
         floatPopup.selectItem(at: FloatMode.allCases.firstIndex(of: tiler.floatMode) ?? 0)
         floatingAppsTab.view = buildFloatingAppsPage()  // the app list changes; rebuild each time
@@ -159,9 +162,24 @@ final class SettingsWindowController: NSWindowController {
     }
 
     private func buildSnappingPage() -> NSView {
-        let rows = hotkeyRows(HotkeyAction.snapping, status: snapStatus)
+        let table = grid(hotkeyRows(HotkeyAction.snapping, status: snapStatus))
+        table.column(at: 0).xPlacement = .center   // icons
+        table.column(at: 1).xPlacement = .leading  // names
+        table.rowAlignment = .none                 // image views have no baseline; center rows instead
+        for index in 0..<table.numberOfRows { table.row(at: index).yPlacement = .center }
+        table.rowSpacing = 8
+        autoTileOthersBox.target = self
+        autoTileOthersBox.action = #selector(autoTileOthersToggled)
+        let footer = NSStackView(views: [autoTileOthersBox, snapStatus])
+        footer.orientation = .vertical
+        footer.alignment = .leading
+        footer.spacing = 6
         return page(intro: "Move the window you're working in to part of its screen. Restore Defaults on the Hotkeys tab resets these too.",
-                    grid: scrolled(grid(rows), height: 300), footer: snapStatus)
+                    grid: scrolled(table, height: 270), footer: footer)
+    }
+
+    @objc private func autoTileOthersToggled() {
+        tiler.autoTileOthers = autoTileOthersBox.state == .on
     }
 
     /// One row per action: name, recorder, Clear. Messages go to `status`.
@@ -185,7 +203,14 @@ final class SettingsWindowController: NSWindowController {
             let clear = NSButton(title: "Clear", target: self, action: #selector(clearShortcut(_:)))
             clear.bezelStyle = .rounded
             clear.identifier = NSUserInterfaceItemIdentifier(action.rawValue)
-            rows.append([label(action.title + ":"), field, clear])
+            if let position = action.snapPositions?.first {
+                // Snap rows lead with a picture of the position: [icon, name, shortcut, Clear].
+                let icon = NSImageView(image: position.icon(size: NSSize(width: 26, height: 18)))
+                icon.contentTintColor = .labelColor
+                rows.append([icon, label(action.title), field, clear])
+            } else {
+                rows.append([label(action.title + ":"), field, clear])
+            }
         }
         return rows
     }
@@ -394,7 +419,7 @@ final class SettingsWindowController: NSWindowController {
 
     @objc private func clearShortcut(_ sender: NSButton) {
         guard let raw = sender.identifier?.rawValue, let action = HotkeyAction(rawValue: raw) else { return }
-        apply(nil, to: action, status: action.snap == nil ? hotkeyStatus : snapStatus)
+        apply(nil, to: action, status: action.snapPositions == nil ? hotkeyStatus : snapStatus)
     }
 
     @objc private func restoreDefaults() {

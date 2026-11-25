@@ -49,7 +49,7 @@ enum SnapPosition: String, CaseIterable {
     case leftHalf, rightHalf, topHalf, bottomHalf
     case topLeft, topRight, bottomLeft, bottomRight
     case firstThird, centerThird, lastThird, firstTwoThirds, lastTwoThirds
-    case maximize, center
+    case stretchVertical, maximize, center
 
     var title: String {
         switch self {
@@ -66,13 +66,20 @@ enum SnapPosition: String, CaseIterable {
         case .lastThird:      return "Right Third"
         case .firstTwoThirds: return "Left Two Thirds"
         case .lastTwoThirds:  return "Right Two Thirds"
+        case .stretchVertical: return "Stretch Vertically"
         case .maximize:       return "Maximize"
         case .center:         return "Center"
         }
     }
 
+    /// Top/Bottom Half change only the vertical: the window keeps its left edge and width,
+    /// so a left-third window becomes a top-left third. Every other position sets both axes.
+    /// Stretch Vertically is the same idea at full height.
+    var keepsHorizontal: Bool { self == .topHalf || self == .bottomHalf || self == .stretchVertical }
+
     /// The fraction of the area covered: (x0, y0, x1, y1), with y increasing downward.
-    /// `.center` has none; it keeps the window's size.
+    /// For `keepsHorizontal` positions only y0/y1 apply. `.center` has none; it keeps the
+    /// window's size.
     var fractions: (CGFloat, CGFloat, CGFloat, CGFloat)? {
         switch self {
         case .leftHalf:       return (0, 0, 0.5, 1)
@@ -88,6 +95,7 @@ enum SnapPosition: String, CaseIterable {
         case .lastThird:      return (2.0 / 3, 0, 1, 1)
         case .firstTwoThirds: return (0, 0, 2.0 / 3, 1)
         case .lastTwoThirds:  return (1.0 / 3, 0, 1, 1)
+        case .stretchVertical: return (0, 0, 1, 1)  // x is kept from the window
         case .maximize:       return (0, 0, 1, 1)
         case .center:         return nil
         }
@@ -165,7 +173,8 @@ enum LayoutEngine {
     /// The frame for snapping one window. The gap matches tiling: a full gap at the screen
     /// edges and half a gap on each side of an inner edge. So a left half and a right half
     /// sit exactly one gap apart, the same as two tiled cells.
-    static func snapFrame(_ position: SnapPosition, in area: CGRect, gap rawGap: CGFloat, windowSize: CGSize) -> CGRect {
+    static func snapFrame(_ position: SnapPosition, in area: CGRect, gap rawGap: CGFloat, window: CGRect) -> CGRect {
+        let windowSize = window.size
         let gap = max(0, rawGap)
         let inner = area.insetBy(dx: gap, dy: gap)
         guard !inner.isNull, inner.width > 0, inner.height > 0 else { return area }
@@ -177,11 +186,34 @@ enum LayoutEngine {
             return snapped(left: x, top: y, right: x + w, bottom: y + h)
         }
         let half = gap / 2
-        let left = inner.minX + inner.width * x0 + (x0 > 0 ? half : 0)
-        let right = inner.minX + inner.width * x1 - (x1 < 1 ? half : 0)
+        var left = inner.minX + inner.width * x0 + (x0 > 0 ? half : 0)
+        var right = inner.minX + inner.width * x1 - (x1 < 1 ? half : 0)
+        if position.keepsHorizontal {
+            // Keep the window's own left edge and width, pulled back on-screen if it hangs
+            // off a side (and narrowed if it's wider than the screen).
+            let width = min(window.width, inner.width)
+            left = min(max(window.minX, inner.minX), inner.maxX - width)
+            right = left + width
+        }
         let top = inner.minY + inner.height * y0 + (y0 > 0 ? half : 0)
         let bottom = inner.minY + inner.height * y1 - (y1 < 1 ? half : 0)
         return snapped(left: left, top: top, right: right, bottom: bottom)
+    }
+
+    /// Within this many points per edge, a window counts as already "at" a position.
+    /// Loose enough for windows that snap their size to a grid (Terminal).
+    static let snapMatchTolerance: CGFloat = 12
+
+    /// For a cycling hotkey: the position after the one the window is at now (wrapping),
+    /// or the first if it's at none of them. The window's frame is the only state.
+    static func nextSnap(in positions: [SnapPosition], window: CGRect, area: CGRect, gap: CGFloat) -> SnapPosition {
+        let t = snapMatchTolerance
+        let current = positions.firstIndex { position in
+            let target = snapFrame(position, in: area, gap: gap, window: window)
+            return abs(target.minX - window.minX) <= t && abs(target.maxX - window.maxX) <= t
+                && abs(target.minY - window.minY) <= t && abs(target.maxY - window.maxY) <= t
+        }
+        return positions[current.map { ($0 + 1) % positions.count } ?? 0]
     }
 
     /// Free strips narrower or shorter than this are useless for tiling and are dropped.

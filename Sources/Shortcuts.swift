@@ -72,42 +72,59 @@ struct Shortcut: Equatable {
 
 /// Everything a hotkey can trigger.
 enum HotkeyAction: String, CaseIterable {
-    case tile, tuckAll, nextLayout, forgetLayout
+    case tile, tileOthers, tuckAll, nextLayout, forgetLayout
     // Snap the focused window. Raw values are the persisted keys; don't rename them.
     case snapLeftHalf = "snap.leftHalf", snapRightHalf = "snap.rightHalf"
     case snapTopHalf = "snap.topHalf", snapBottomHalf = "snap.bottomHalf"
     case snapTopLeft = "snap.topLeft", snapTopRight = "snap.topRight"
     case snapBottomLeft = "snap.bottomLeft", snapBottomRight = "snap.bottomRight"
-    case snapFirstThird = "snap.firstThird", snapCenterThird = "snap.centerThird", snapLastThird = "snap.lastThird"
-    case snapFirstTwoThirds = "snap.firstTwoThirds", snapLastTwoThirds = "snap.lastTwoThirds"
+    case snapStretchVertical = "snap.stretchVertical"
+    // One key per group: each press moves to the next position in the cycle.
+    case snapThirds = "snapCycle.thirds", snapTwoThirds = "snapCycle.twoThirds"
     case snapMaximize = "snap.maximize", snapCenter = "snap.center"
 
-    /// The snap position this action applies, if it's a snap action.
-    var snap: SnapPosition? {
-        guard rawValue.hasPrefix("snap.") else { return nil }
-        return SnapPosition(rawValue: String(rawValue.dropFirst("snap.".count)))
+    /// The positions this action snaps to: one for a plain snap, several for a cycle.
+    /// nil for non-snap actions.
+    var snapPositions: [SnapPosition]? {
+        switch self {
+        case .snapThirds:    return [.firstThird, .centerThird, .lastThird]
+        case .snapTwoThirds: return [.firstTwoThirds, .lastTwoThirds]
+        default:
+            guard rawValue.hasPrefix("snap.") else { return nil }
+            return SnapPosition(rawValue: String(rawValue.dropFirst("snap.".count))).map { [$0] }
+        }
     }
 
-    static var general: [HotkeyAction] { allCases.filter { $0.snap == nil } }
-    static var snapping: [HotkeyAction] { allCases.filter { $0.snap != nil } }
+    /// The action whose hotkey reaches `position` (directly or by cycling).
+    static func covering(_ position: SnapPosition) -> HotkeyAction? {
+        allCases.first { $0.snapPositions?.contains(position) == true }
+    }
+
+    static var general: [HotkeyAction] { allCases.filter { $0.snapPositions == nil } }
+    static var snapping: [HotkeyAction] { allCases.filter { $0.snapPositions != nil } }
 
     var title: String {
         switch self {
         case .tile:         return "Tile / Restore"
+        case .tileOthers:   return "Tile Others"
         case .tuckAll:      return "Tuck All / Show All"
         case .nextLayout:   return "Next Layout"
         case .forgetLayout: return "Forget Saved Layout"
-        default:            return snap?.title ?? rawValue
+        case .snapThirds:    return "Thirds (press to cycle)"
+        case .snapTwoThirds: return "Two Thirds (press to cycle)"
+        default:            return snapPositions?.first?.title ?? rawValue
         }
     }
 
     /// Snap defaults use ⌃⌥ plus an arrow or a letter laid out like the screen (U I / J K
-    /// for corners, D F G for thirds), the convention most window snappers share.
+    /// for corners), the convention most window snappers share. Thirds and two thirds
+    /// each need only one key, since pressing again cycles.
     var defaultShortcut: Shortcut? {
         let ctrlOpt = UInt32(controlKey | optionKey)
         func key(_ code: Int, _ name: String, _ mods: UInt32) -> Shortcut { Shortcut(keyCode: UInt32(code), modifiers: mods, key: name) }
         switch self {
-        case .tile:               return key(kVK_ANSI_T, "T", UInt32(controlKey | optionKey | cmdKey))
+        case .tile:               return key(kVK_ANSI_T, "T", ctrlOpt)
+        case .tileOthers:         return key(kVK_ANSI_A, "A", ctrlOpt)
         case .tuckAll:            return key(kVK_ANSI_H, "H", UInt32(cmdKey | shiftKey))
         case .nextLayout, .forgetLayout: return nil
         case .snapLeftHalf:       return key(kVK_LeftArrow, "←", ctrlOpt)
@@ -118,11 +135,9 @@ enum HotkeyAction: String, CaseIterable {
         case .snapTopRight:       return key(kVK_ANSI_I, "I", ctrlOpt)
         case .snapBottomLeft:     return key(kVK_ANSI_J, "J", ctrlOpt)
         case .snapBottomRight:    return key(kVK_ANSI_K, "K", ctrlOpt)
-        case .snapFirstThird:     return key(kVK_ANSI_D, "D", ctrlOpt)
-        case .snapCenterThird:    return key(kVK_ANSI_F, "F", ctrlOpt)
-        case .snapLastThird:      return key(kVK_ANSI_G, "G", ctrlOpt)
-        case .snapFirstTwoThirds: return key(kVK_ANSI_E, "E", ctrlOpt)
-        case .snapLastTwoThirds:  return key(kVK_ANSI_T, "T", ctrlOpt)
+        case .snapStretchVertical: return key(kVK_UpArrow, "↑", ctrlOpt | UInt32(shiftKey))
+        case .snapThirds:         return key(kVK_ANSI_D, "D", ctrlOpt)
+        case .snapTwoThirds:      return key(kVK_ANSI_E, "E", ctrlOpt)
         case .snapMaximize:       return key(kVK_Return, "↩", ctrlOpt)
         case .snapCenter:         return key(kVK_ANSI_C, "C", ctrlOpt)
         }

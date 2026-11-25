@@ -209,14 +209,32 @@ struct LayoutEngineTests {
         // Snap positions.
         do {
             let size = CGSize(width: 600, height: 400)
-            func snap(_ p: SnapPosition) -> CGRect { LayoutEngine.snapFrame(p, in: area, gap: gap, windowSize: size) }
+            let current = CGRect(x: 300, y: 200, width: size.width, height: size.height)
+            func snap(_ p: SnapPosition, from window: CGRect? = nil) -> CGRect {
+                LayoutEngine.snapFrame(p, in: area, gap: gap, window: window ?? current)
+            }
 
             check(snap(.maximize) == inner, "snap: maximize fills the inset area")
             let left = snap(.leftHalf), right = snap(.rightHalf)
             check(left.minX == inner.minX && right.maxX == inner.maxX, "snap: halves reach the edges")
             check(right.minX - left.maxX == gap, "snap: halves one gap apart, got \(right.minX - left.maxX)")
             check(left.height == inner.height && abs(left.width - right.width) <= 1, "snap: halves equal and full height")
-            check(snap(.bottomHalf).minY - snap(.topHalf).maxY == gap, "snap: top/bottom one gap apart")
+            // Top/bottom halves keep the window's x and width; only the vertical changes.
+            let top = snap(.topHalf), bottom = snap(.bottomHalf)
+            check(top.minX == current.minX && top.width == current.width, "snap: top half keeps x/width, got \(top)")
+            check(bottom.minX == current.minX && bottom.width == current.width, "snap: bottom half keeps x/width")
+            check(top.minY == inner.minY && bottom.maxY == inner.maxY, "snap: top/bottom reach the edges")
+            check(bottom.minY - top.maxY == gap, "snap: top/bottom one gap apart")
+            // A left-third window snapped to the top becomes the top-left third.
+            let third = snap(.firstThird)
+            check(snap(.topHalf, from: third).minX == third.minX && snap(.topHalf, from: third).width == third.width,
+                  "snap: left third + top half = top-left third")
+            // Hanging off the right edge: pulled back inside, width kept.
+            let offRight = snap(.topHalf, from: CGRect(x: 1300, y: 100, width: 600, height: 400))
+            check(offRight.maxX == inner.maxX && offRight.width == 600, "snap: off-screen window pulled inside (\(offRight))")
+            // Wider than the screen: narrowed to fit.
+            check(snap(.bottomHalf, from: CGRect(x: -100, y: 0, width: 3000, height: 400)).width == inner.width,
+                  "snap: too-wide window narrowed to the screen")
 
             let corners = [snap(.topLeft), snap(.topRight), snap(.bottomLeft), snap(.bottomRight)]
             check(noOverlaps(corners), "snap: corners overlap")
@@ -229,10 +247,28 @@ struct LayoutEngineTests {
             check(snap(.firstTwoThirds).maxX == thirds[1].maxX, "snap: left two-thirds ends where the center third does")
             check(snap(.lastTwoThirds).minX == thirds[1].minX, "snap: right two-thirds starts where the center third does")
 
+            // Stretch vertically: x and width kept, full height.
+            let stretched = snap(.stretchVertical)
+            check(stretched.minX == current.minX && stretched.width == current.width, "snap: stretch keeps x/width")
+            check(stretched.minY == inner.minY && stretched.maxY == inner.maxY, "snap: stretch is full height")
+
+            // Cycling thirds: none → first → center → last → first.
+            let cycle: [SnapPosition] = [.firstThird, .centerThird, .lastThird]
+            func next(_ w: CGRect) -> SnapPosition { LayoutEngine.nextSnap(in: cycle, window: w, area: area, gap: gap) }
+            check(next(current) == .firstThird, "cycle: from elsewhere starts at the first third")
+            check(next(snap(.firstThird)) == .centerThird, "cycle: first → center")
+            check(next(snap(.centerThird)) == .lastThird, "cycle: center → last")
+            check(next(snap(.lastThird)) == .firstThird, "cycle: last wraps to first")
+            // A few points off (Terminal's grid snapping) still counts as being there.
+            check(next(snap(.centerThird).insetBy(dx: 4, dy: 3)) == .lastThird, "cycle: tolerance")
+            let pair: [SnapPosition] = [.firstTwoThirds, .lastTwoThirds]
+            check(LayoutEngine.nextSnap(in: pair, window: snap(.firstTwoThirds), area: area, gap: gap) == .lastTwoThirds,
+                  "cycle: two thirds toggles")
+
             let centered = snap(.center)
             check(centered.size == size, "snap: center keeps size")
             check(abs(centered.midX - inner.midX) <= 1 && abs(centered.midY - inner.midY) <= 1, "snap: center is centered")
-            let huge = LayoutEngine.snapFrame(.center, in: area, gap: gap, windowSize: CGSize(width: 5000, height: 5000))
+            let huge = LayoutEngine.snapFrame(.center, in: area, gap: gap, window: CGRect(x: 0, y: 0, width: 5000, height: 5000))
             check(huge == inner, "snap: oversized window centered is clamped to the area")
         }
 
