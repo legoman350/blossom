@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: "Blossom")
+        statusItem.button?.image = MenuBarIcon.make()  // the app icon's blossom, as a template
 
         // Menu, top to bottom: tiling, Tuck, problems (only when there are any), app.
         let menu = NSMenu()

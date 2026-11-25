@@ -90,6 +90,9 @@ final class SettingsWindowController: NSWindowController {
     private let tilingStatus = SettingsWindowController.helpLabel("")
     private let floatingAppsTab = NSTabViewItem(identifier: "floating")
     private let accessibilityLabel = NSTextField(labelWithString: "")
+    private let loginBox = NSButton(checkboxWithTitle: "Open Blossom at login", target: nil, action: nil)
+    private let loginNote = SettingsWindowController.helpLabel("")
+    private let loginApproveButton = NSButton(title: "Open Login Items Settings…", target: nil, action: nil)
     private let accessibilityButton = NSButton(title: "Open Accessibility Settings…", target: nil, action: nil)
 
     init(hotkeys: HotkeyManager, tiler: Tiler, onChange: @escaping () -> Void) {
@@ -153,6 +156,33 @@ final class SettingsWindowController: NSWindowController {
         accessibilityLabel.stringValue = trusted ? "✓ Granted" : "Not granted. Tiling won't work without it."
         accessibilityLabel.textColor = trusted ? .systemGreen : .systemRed
         accessibilityButton.isHidden = trusted
+        refreshLoginItem()
+    }
+
+    /// Reads the login item state fresh every time: the user can change it in System
+    /// Settings while this window is closed.
+    private func refreshLoginItem(error: String? = nil) {
+        let state = LoginItem.state
+        loginBox.state = (state == .on || state == .needsApproval) ? .on : .off
+        loginBox.isEnabled = state != .unavailable
+        loginApproveButton.isHidden = state != .needsApproval
+        let note: String
+        switch state {
+        case .on:            note = "Blossom starts when you log in. Also listed in System Settings → General → Login Items."
+        case .off:           note = "Blossom starts only when you open it."
+        case .needsApproval: note = "macOS is waiting for you to allow Blossom in Login Items."
+        case .unavailable:   note = "Available once Blossom is installed in /Applications (./build.sh install)."
+        }
+        loginNote.stringValue = error ?? note
+        loginNote.textColor = error != nil || state == .needsApproval ? .systemOrange : .secondaryLabelColor
+    }
+
+    @objc private func loginToggled() {
+        refreshLoginItem(error: LoginItem.set(loginBox.state == .on))
+    }
+
+    @objc private func openLoginItems() {
+        LoginItem.openSystemSettings()
     }
 
     // MARK: Pages
@@ -309,7 +339,15 @@ final class SettingsWindowController: NSWindowController {
         accessibilityButton.action = #selector(openAccessibility)
         accessibilityButton.bezelStyle = .rounded
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        loginBox.target = self
+        loginBox.action = #selector(loginToggled)
+        loginApproveButton.target = self
+        loginApproveButton.action = #selector(openLoginItems)
+        loginApproveButton.bezelStyle = .rounded
         let rows: [[NSView]] = [
+            [label("Startup:"), loginBox],
+            [NSGridCell.emptyContentView, loginNote],
+            [NSGridCell.emptyContentView, loginApproveButton],
             [label("Accessibility:"), accessibilityLabel],
             [NSGridCell.emptyContentView, accessibilityButton],
             [NSGridCell.emptyContentView, Self.helpLabel("Blossom needs Accessibility to move and resize windows. Tuck's hide/show works without it.")],

@@ -1,5 +1,10 @@
-Blossom.app/
-.build/
+# Build output from build.sh and Xcode (SYMROOT = build/)
 build/
-.DS_Store
+DerivedData/
+
+# Xcode per-user state
 xcuserdata/
+*.xcuserstate
+
+.DS_Store
+Screenshot*.png

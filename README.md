@@ -19,10 +19,17 @@ desktops, menu bar utility, app hider, window management, macOS Spaces
 Requires the Xcode Command Line Tools (`xcode-select --install`).
 
 ```
-./build.sh            # builds ./Blossom.app
+./build.sh            # builds build/Release/Blossom.app
 ./build.sh install    # builds, copies to /Applications, launches
 ./build.sh test       # runs the layout engine tests
 ```
+
+Or open **Blossom.xcodeproj** in Xcode and press ⌘R. The *Blossom* scheme builds and runs
+the app (Debug, in `build/Debug/`); the *LayoutEngineTests* scheme runs the tests. Both
+build paths sign with the same certificate (below), so they share one Accessibility grant.
+
+After adding or removing a source file, run `python3 Tools/gen-xcodeproj.py` to update the
+Xcode project (or add the file in Xcode).
 
 ## Permissions
 
@@ -37,6 +44,9 @@ The build is ad-hoc signed. If tiling silently stops working after a rebuild, re
 Blossom from the Accessibility list and add it again.
 
 ## Settings and hotkeys
+
+To start Blossom when you log in, tick **Open Blossom at login** in Settings → General. It
+works once Blossom is installed in /Applications.
 
 Choose **Settings…** (⌘,) in Blossom's menu to change hotkeys. Click a field and press
 the new combination: it needs ⌘, ⌃ or ⌥, unless it's an F-key. Esc cancels, and **Clear**
