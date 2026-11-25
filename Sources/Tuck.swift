@@ -16,7 +16,7 @@ final class TuckController: NSObject {
     private var spaceChangeWorkItem: DispatchWorkItem?
 
     var hotkeyAvailable: Bool { hotkey != nil }
-    var hasTrackedApps: Bool { !entries.isEmpty }
+    var hasFloatingApps: Bool { !entries.isEmpty }
 
     func start() {
         sync()
@@ -37,7 +37,7 @@ final class TuckController: NSObject {
 
     // MARK: Tuck all / show all (⌘⇧H)
 
-    /// True if any tracked app currently has a window on screen. A minimized window counts
+    /// True if any floating app currently has a window on screen. A minimized window counts
     /// as tucked away, not visible.
     var anyVisible: Bool {
         entries.keys.contains { bundleID in
@@ -75,14 +75,14 @@ final class TuckController: NSObject {
     // MARK: Keeping the icons in sync
 
     func sync() {
-        let tracked = SpacesPrefs.trackedBundleIDs()
+        let floating = SpacesPrefs.floatingBundleIDs()
         // Only running apps get an icon. Key by the running app's canonical ID.
         var wanted = Set<String>()
         for app in NSWorkspace.shared.runningApplications {
             guard app.activationPolicy == .regular, !app.isTerminated,
                   app.processIdentifier != getpid(),
                   let bundleID = app.bundleIdentifier,
-                  tracked.contains(bundleID.lowercased()) else { continue }
+                  floating.contains(bundleID.lowercased()) else { continue }
             wanted.insert(bundleID)
         }
 
@@ -188,7 +188,7 @@ final class TuckController: NSObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.40, execute: work)
     }
 
-    /// Hide every tracked app in `.switchSpace` mode except the frontmost one.
+    /// Hide every floating app in `.switchSpace` mode except the frontmost one.
     private func tuckForSpaceChange() {
         // Restoring an app can itself trigger a desktop change; ignore our own.
         if Date().timeIntervalSince1970 - lastClickAt < 1.0 { return }

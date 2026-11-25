@@ -3,7 +3,7 @@ import Foundation
 /// Per-app Tuck preferences, stored in our own UserDefaults.
 enum TuckSettings {
 
-    /// What hides a tracked app automatically. Default is `.switchSpace`.
+    /// What hides a floating app automatically. Default is `.switchSpace`.
     enum AutoTuckMode: String, CaseIterable {
         case none
         case loseFocus

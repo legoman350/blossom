@@ -1,6 +1,6 @@
 import AppKit
 
-/// One menu bar icon for one tracked app. Left click tucks or shows the app; right click
+/// One menu bar icon for one floating app. Left click tucks or shows the app; right click
 /// (or control-click) opens its menu. Dimmed means tucked away (hidden or minimized).
 final class TrayEntry: NSObject {
     let bundleID: String

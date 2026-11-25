@@ -8,10 +8,10 @@ import Foundation
 enum SpacesPrefs {
     private static let manualKey = "tuckManualBundleIDs"
 
-    /// Lowercased bundle IDs of every app Tuck should track. Spaces may store
+    /// Lowercased bundle IDs of every floating app. Spaces may store
     /// "com.apple.mobilesms" while the running app reports "com.apple.MobileSMS", so all
     /// comparisons are case-insensitive.
-    static func trackedBundleIDs() -> Set<String> {
+    static func floatingBundleIDs() -> Set<String> {
         dockAllDesktopsBundleIDs().union(manualBundleIDs().map { $0.lowercased() })
     }
 

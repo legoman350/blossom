@@ -13,14 +13,22 @@ final class Tiler {
     var hasSnapshot: Bool { snapshot != nil }
 
     private static let styleKey = "layoutStyle"
-    private static let skipTuckAppsKey = "skipTuckAppsWhenTiling"
+    private static let floatModeKey = "floatMode"
 
-    /// When on, apps Tuck manages (All Desktops in the Dock, or the manual Tuck list) are
-    /// left out of tiling. Their windows float on every desktop, so giving them a cell on
-    /// one desktop usually isn't what you want. On by default.
-    var skipTuckApps: Bool {
-        get { UserDefaults.standard.object(forKey: Self.skipTuckAppsKey) as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: Self.skipTuckAppsKey) }
+    /// Below this share of the screen, the space left beside floating windows is too
+    /// cramped to tile into. We use the whole screen instead and let the floats overlap.
+    static let minFreeShare: CGFloat = 0.4
+
+    /// How tiling treats floating apps (All Desktops in the Dock, or the manual list).
+    var floatMode: FloatMode {
+        get { UserDefaults.standard.string(forKey: Self.floatModeKey).flatMap(FloatMode.init(rawValue:)) ?? .tileAround }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: Self.floatModeKey) }
+    }
+
+    /// Switches float mode; re-tiles straight away if already tiled (see `setStyle`).
+    func setFloatMode(_ mode: FloatMode) {
+        floatMode = mode
+        if snapshot != nil, Permissions.isTrusted() { tile() }
     }
 
     /// The chosen layout style, remembered across launches.
@@ -58,12 +66,27 @@ final class Tiler {
 
         // Phase 1: only the display with keyboard focus. Windows are frontmost first, so if
         // there are more than the cap, the ones buried at the back are left alone.
-        // Filter before the cap, so skipped apps don't use up any of the 8 slots.
-        let excluded = skipTuckApps ? SpacesPrefs.trackedBundleIDs() : []  // lowercased
-        let windows = Array(WindowEnumerator.tileableWindows()
+        let onScreen = WindowEnumerator.tileableWindows()
             .filter { screenRect.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }
-            .filter { window in !(window.bundleID.map { excluded.contains($0.lowercased()) } ?? false) }
-            .prefix(LayoutEngine.maxWindows))
+
+        // Floating windows are pulled out before the cap, so they don't use up any of the
+        // 8 slots. They never enter the snapshot, so restore never moves them either.
+        let floatingIDs = floatMode == .tileNormally ? [] : SpacesPrefs.floatingBundleIDs()  // lowercased
+        let isFloating = { (w: TileableWindow) in w.bundleID.map { floatingIDs.contains($0.lowercased()) } ?? false }
+        let windows = Array(onScreen.filter { !isFloating($0) }.prefix(LayoutEngine.maxWindows))
+
+        // Tile around: lay out in the largest rectangle the floating windows leave free.
+        // Tucked (hidden) or minimized floats aren't on screen, so they don't take space.
+        var area = usable
+        if floatMode == .tileAround {
+            let obstacles = onScreen.filter(isFloating).map(\.frame)
+            let free = LayoutEngine.freeArea(in: usable, avoiding: obstacles)
+            if free.width * free.height >= Self.minFreeShare * usable.width * usable.height {
+                area = free
+            } else if !obstacles.isEmpty {
+                NSLog("Blossom: floating window leaves too little room; tiling full screen")
+            }
+        }
 
         // Minimums known before we start: learned on earlier presses, or the window's own
         // size if it can't be resized at all.
@@ -71,7 +94,7 @@ final class Tiler {
             LayoutItem(minSize: MinSizeCache.minSize(for: window.bundleID),
                        fixedSize: window.canResize ? nil : window.frame.size)
         }
-        var targets = LayoutEngine.frames(for: items, in: usable, style: style, gap: Self.gap)
+        var targets = LayoutEngine.frames(for: items, in: area, style: style, gap: Self.gap)
         var actual = [CGRect?](repeating: nil, count: windows.count)
 
         // Pass 1: apply, read back, and learn from any window that came back larger than
@@ -90,7 +113,7 @@ final class Tiler {
         // windows get bigger cells and nothing overlaps. Next time the cache makes pass 1
         // right, so this costs extra round-trips only the first time an app clamps.
         if learnedSomething {
-            let retargets = LayoutEngine.frames(for: items, in: usable, style: style, gap: Self.gap)
+            let retargets = LayoutEngine.frames(for: items, in: area, style: style, gap: Self.gap)
             if retargets.count == targets.count {
                 for (i, window) in windows.enumerated() where actual[i] != nil && retargets[i] != targets[i] {
                     actual[i] = AX.setFrame(window.element, retargets[i])

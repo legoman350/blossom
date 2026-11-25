@@ -11,12 +11,14 @@ it indefinitely. The saved snapshot persists until explicitly cleared, so restor
 available.
 
 **Tuck (⌘⇧H).** A menu bar tray, merged in from the standalone Tuck app (the original is
-kept in `tuck/` for reference; it is not built). Every tracked app gets its own menu bar
+kept in `tuck/` for reference; it is not built). Every floating app gets its own menu bar
 icon. Clicking it hides the app or shows it again, which avoids macOS "auto-swoosh" (the
 desktop switch when you activate an app assigned to None or This Desktop). Tracked apps are
-those assigned to **All Desktops** in the Dock, plus a manual "Tuck Apps" list in the main
+those assigned to **All Desktops** in the Dock, plus a manual "Floating Apps" list in the main
 menu. All-Desktops windows already exist on every desktop, so Tuck only toggles visibility
-and never moves anything between desktops. ⌘⇧H tucks all tracked apps, or shows them all.
+and never moves anything between desktops. ⌘⇧H tucks all floating apps, or shows them all.
+
+**Naming:** apps in that set are **floating apps**; "tuck" is the hide/show action.
 
 ## Hard constraints — do not violate
 
@@ -66,7 +68,7 @@ Sources/
   LayoutEngine.swift     PURE functions. No AppKit. Frames in, frames out.
   Tiler.swift            Applies layouts, owns the snapshot and the toggle state machine
   Tuck.swift             TuckController: tray sync, hide/show, auto-tuck, per-app menu
-  TrayEntry.swift        One menu bar icon per tracked app
+  TrayEntry.swift        One menu bar icon per floating app
   TuckWindows.swift      Visible / minimized checks, reopen, "new window" request
   TuckSettings.swift     Per-app auto-tuck mode and new-window setting (UserDefaults)
   SpacesPrefs.swift      Reads Dock "All Desktops" bindings; manual app list fallback
@@ -153,9 +155,9 @@ app freezes the whole tiling operation.
 - **Every Carbon hotkey handler sees every hotkey press.** `Hotkey` gives each instance a
   unique ID and ignores presses that aren't its own. Removing that check makes ⌘⇧H tile too.
 - **Tuck hides per app, not per window.** `hide()` takes everything the app has open.
-- **Finder resists `hide()`** and behaves oddly if tracked.
+- **Finder resists `hide()`** and behaves oddly as a floating app.
 - **Menu bar space is finite.** On notched MacBooks, icons that overflow past the notch
-  don't render at all. Three or four tracked apps is a comfortable ceiling.
+  don't render at all. Three or four floating apps is a comfortable ceiling.
 - A tucked app stays in the Dock, ⌘-Tab and Mission Control. Removing it from those
   needs private APIs.
 - The tray refreshes on a 3-second poll: there's no notification for Dock "Assign To"
@@ -178,8 +180,14 @@ app freezes the whole tiling operation.
   (the default).
 - **Settings carry over:** on first launch, Tuck settings are imported once from the
   standalone app's `local.tuck.agent` defaults.
-- **Tiling and Tuck don't interact.** Hidden and minimized windows aren't on screen, so
-  the tiler skips them. Visible tracked apps are tiled like any other window.
+- **Floating windows and tiling:** Floating Windows menu, default *Tile Around Them*.
+  - Floating windows are never tiled or put in the snapshot.
+  - The others tile into `LayoutEngine.freeArea`: the largest rectangle the visible
+    floats leave free.
+  - If that's under 40% of the screen (a float mid-screen), tile full screen and accept
+    the overlap.
+  - Tucked (hidden) floats aren't on screen, so they take no space.
+  - Other modes: *Leave Alone* (tile underneath) and *Tile Like Others*.
 
 ## Phases
 

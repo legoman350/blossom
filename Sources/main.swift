@@ -12,9 +12,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let toggleItem = NSMenuItem(title: "", action: #selector(toggleTiling), keyEquivalent: "")
     private let forgetItem = NSMenuItem(title: "Forget Saved Layout", action: #selector(forgetLayout), keyEquivalent: "")
     private let layoutMenu = NSMenu()
-    private let skipTuckItem = NSMenuItem(title: "Don't Tile Tuck Apps", action: #selector(toggleSkipTuck), keyEquivalent: "")
+    private let floatMenu = NSMenu()
     private let tuckAllItem = NSMenuItem(title: "", action: #selector(toggleTuckAll), keyEquivalent: "")
-    private let tuckAppsItem = NSMenuItem(title: "Tuck Apps", action: nil, keyEquivalent: "")
+    private let floatingAppsItem = NSMenuItem(title: "Floating Apps", action: nil, keyEquivalent: "")
     private let hotkeyWarningItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let permissionItem = NSMenuItem(title: "", action: #selector(openPermissions), keyEquivalent: "")
 
@@ -26,7 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         menu.autoenablesItems = false
         for item in [toggleItem, forgetItem, tuckAllItem, permissionItem] { item.target = self }
-        tuckAppsItem.submenu = NSMenu()
+        floatingAppsItem.submenu = NSMenu()
         hotkeyWarningItem.isEnabled = false
 
         menu.addItem(toggleItem)
@@ -34,14 +34,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let layoutItem = NSMenuItem(title: "Layout", action: nil, keyEquivalent: "")
         layoutItem.submenu = layoutMenu
         menu.addItem(layoutItem)
-        skipTuckItem.target = self
-        menu.addItem(skipTuckItem)
+        let floatItem = NSMenuItem(title: "Floating Windows", action: nil, keyEquivalent: "")
+        floatItem.submenu = floatMenu
+        menu.addItem(floatItem)
         let resetSizes = NSMenuItem(title: "Reset Learned Window Sizes", action: #selector(resetLearnedSizes), keyEquivalent: "")
         resetSizes.target = self
         menu.addItem(resetSizes)
         menu.addItem(.separator())
         menu.addItem(tuckAllItem)
-        menu.addItem(tuckAppsItem)
+        menu.addItem(floatingAppsItem)
         menu.addItem(.separator())
         menu.addItem(permissionItem)
         menu.addItem(hotkeyWarningItem)
@@ -66,11 +67,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggleItem.title = tiler.hasSnapshot ? "Restore Layout  ⌃⌥⌘T" : "Tile Windows  ⌃⌥⌘T"
         forgetItem.isEnabled = tiler.hasSnapshot
         rebuildLayoutMenu()
-        skipTuckItem.state = tiler.skipTuckApps ? .on : .off
+        rebuildFloatMenu()
 
-        tuckAllItem.title = tuck.anyVisible || !tuck.hasTrackedApps ? "Tuck All Away  ⌘⇧H" : "Show All Tucked  ⌘⇧H"
-        tuckAllItem.isEnabled = tuck.hasTrackedApps
-        rebuildTuckAppsMenu()
+        tuckAllItem.title = tuck.anyVisible || !tuck.hasFloatingApps ? "Tuck All Away  ⌘⇧H" : "Show All Tucked  ⌘⇧H"
+        tuckAllItem.isEnabled = tuck.hasFloatingApps
+        rebuildFloatingAppsMenu()
 
         let taken = [tileHotkey == nil ? "⌃⌥⌘T" : nil, tuck.hotkeyAvailable ? nil : "⌘⇧H"].compactMap { $0 }
         hotkeyWarningItem.isHidden = taken.isEmpty
@@ -81,11 +82,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         permissionItem.isEnabled = !trusted
     }
 
-    /// Running apps with a checkmark when Tuck tracks them. Apps assigned to All Desktops
-    /// in the Dock are tracked automatically; the rest can be added by hand. The manual
-    /// list is also the fallback if reading the Dock setting ever breaks.
-    private func rebuildTuckAppsMenu() {
-        guard let submenu = tuckAppsItem.submenu else { return }
+    /// Running apps, checked when they float. Apps assigned to All Desktops in the Dock
+    /// float automatically; the rest can be added by hand. The manual list is also the
+    /// fallback if reading the Dock setting ever breaks.
+    private func rebuildFloatingAppsMenu() {
+        guard let submenu = floatingAppsItem.submenu else { return }
         submenu.removeAllItems()
         submenu.autoenablesItems = false
 
@@ -99,7 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let name = app.localizedName ?? bundleID
             let viaDock = dock.contains(bundleID.lowercased())
             let item = NSMenuItem(title: viaDock ? "\(name) (Dock)" : name,
-                                  action: #selector(toggleManualTuck(_:)), keyEquivalent: "")
+                                  action: #selector(toggleManualFloating(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = bundleID
             item.state = viaDock || SpacesPrefs.isManual(bundleID) ? .on : .off
@@ -123,18 +124,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    private func rebuildFloatMenu() {
+        floatMenu.removeAllItems()
+        for mode in FloatMode.allCases {
+            let item = NSMenuItem(title: mode.title, action: #selector(chooseFloatMode(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = mode.rawValue
+            item.state = mode == tiler.floatMode ? .on : .off
+            floatMenu.addItem(item)
+        }
+    }
+
+    @objc private func chooseFloatMode(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let mode = FloatMode(rawValue: raw) else { return }
+        tiler.setFloatMode(mode)
+    }
+
     @objc private func chooseLayout(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let style = LayoutStyle(rawValue: raw) else { return }
         tiler.setStyle(style)
     }
 
-    @objc private func toggleSkipTuck() { tiler.skipTuckApps.toggle() }
     @objc private func toggleTiling() { tiler.toggle() }
     @objc private func forgetLayout() { tiler.forgetSnapshot() }
     @objc private func resetLearnedSizes() { MinSizeCache.reset() }
     @objc private func toggleTuckAll() { tuck.toggleAll() }
 
-    @objc private func toggleManualTuck(_ sender: NSMenuItem) {
+    @objc private func toggleManualFloating(_ sender: NSMenuItem) {
         guard let bundleID = sender.representedObject as? String else { return }
         SpacesPrefs.toggleManual(bundleID)
         tuck.sync()

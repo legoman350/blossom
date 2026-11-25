@@ -26,6 +26,24 @@ enum LayoutStyle: String, CaseIterable {
     }
 }
 
+/// How tiling treats floating apps' windows.
+enum FloatMode: String, CaseIterable {
+    /// Leave floating windows where they are and tile the rest into the space beside them.
+    case tileAround
+    /// Leave floating windows where they are and tile the full screen underneath them.
+    case ignore
+    /// Tile floating windows like any other window.
+    case tileNormally
+
+    var title: String {
+        switch self {
+        case .tileAround:   return "Tile Around Them"
+        case .ignore:       return "Leave Alone (Overlap)"
+        case .tileNormally: return "Tile Like Others"
+        }
+    }
+}
+
 /// What the layout needs to know about one window.
 struct LayoutItem: Equatable {
     /// Smallest cell the window fits in. Zero when unknown.
@@ -92,6 +110,51 @@ enum LayoutEngine {
             if best == nil || candidate.isBetter(than: best!) { best = candidate }
         }
         return best?.frames ?? []
+    }
+
+    /// Free strips narrower or shorter than this are useless for tiling and are dropped.
+    static let minFreeSide: CGFloat = 200
+
+    /// The largest rectangle of `usable` that no obstacle covers (the maximal-rectangles
+    /// method from bin packing). Each obstacle splits every free rect it touches into the
+    /// strips left of, right of, above and below it. Those strips overlap one another,
+    /// which is what lets the largest one be found. Returns `.zero` if nothing useful is left.
+    ///
+    /// No gap is added around obstacles: the layout already insets its area by the gap, so
+    /// tiles end up exactly one gap away from a floating window.
+    static func freeArea(in usable: CGRect, avoiding obstacles: [CGRect]) -> CGRect {
+        var free = [usable]
+        for raw in obstacles {
+            let obstacle = raw.intersection(usable)
+            guard !obstacle.isNull, obstacle.width > 0, obstacle.height > 0 else { continue }  // off this area
+
+            var next: [CGRect] = []
+            for rect in free {
+                let overlap = rect.intersection(obstacle)
+                guard !overlap.isNull, overlap.width > 0, overlap.height > 0 else {
+                    next.append(rect)
+                    continue
+                }
+                if obstacle.minX > rect.minX {
+                    next.append(CGRect(x: rect.minX, y: rect.minY, width: obstacle.minX - rect.minX, height: rect.height))
+                }
+                if obstacle.maxX < rect.maxX {
+                    next.append(CGRect(x: obstacle.maxX, y: rect.minY, width: rect.maxX - obstacle.maxX, height: rect.height))
+                }
+                if obstacle.minY > rect.minY {
+                    next.append(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: obstacle.minY - rect.minY))
+                }
+                if obstacle.maxY < rect.maxY {
+                    next.append(CGRect(x: rect.minX, y: obstacle.maxY, width: rect.width, height: rect.maxY - obstacle.maxY))
+                }
+            }
+            let useful = next.filter { $0.width >= minFreeSide && $0.height >= minFreeSide }
+            // Drop rects inside another one (and exact duplicates, keeping the first).
+            free = useful.enumerated().filter { i, rect in
+                !useful.enumerated().contains { j, other in j != i && other.contains(rect) && (other != rect || j < i) }
+            }.map(\.element)
+        }
+        return free.max { $0.width * $0.height < $1.width * $1.height } ?? .zero
     }
 
     // MARK: Internals

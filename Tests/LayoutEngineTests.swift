@@ -171,6 +171,41 @@ struct LayoutEngineTests {
             check((frames.map(\.width).max() ?? 0) - (frames.map(\.width).min() ?? 0) <= 1, "columns: equal widths")
         }
 
+        // freeArea: tiling around floating windows.
+        do {
+            let usable = CGRect(x: 0, y: 25, width: 1440, height: 875)
+            check(LayoutEngine.freeArea(in: usable, avoiding: []) == usable, "free: no obstacles → whole area")
+
+            // Docked on the right: the left part remains.
+            let right = CGRect(x: 1040, y: 25, width: 400, height: 875)
+            check(LayoutEngine.freeArea(in: usable, avoiding: [right]) == CGRect(x: 0, y: 25, width: 1040, height: 875),
+                  "free: right-docked float")
+
+            // Small float in the bottom-right corner: the strip beside it (1140×875) beats
+            // the strip above it (1440×575).
+            let corner = CGRect(x: 1140, y: 600, width: 300, height: 300)
+            check(LayoutEngine.freeArea(in: usable, avoiding: [corner]) == CGRect(x: 0, y: 25, width: 1140, height: 875),
+                  "free: corner float → \(LayoutEngine.freeArea(in: usable, avoiding: [corner]))")
+
+            // Floats on both edges: the middle column.
+            let left = CGRect(x: 0, y: 25, width: 300, height: 875)
+            check(LayoutEngine.freeArea(in: usable, avoiding: [left, right]) == CGRect(x: 300, y: 25, width: 740, height: 875),
+                  "free: two edge floats → middle")
+
+            // A float on another display doesn't count.
+            check(LayoutEngine.freeArea(in: usable, avoiding: [CGRect(x: 2000, y: 0, width: 500, height: 500)]) == usable,
+                  "free: off-area obstacle ignored")
+
+            // A float in the middle leaves only strips too small to use, so the result
+            // falls below Tiler's 40% threshold and the caller tiles full screen instead.
+            let middle = CGRect(x: 300, y: 150, width: 840, height: 600)
+            let free = LayoutEngine.freeArea(in: usable, avoiding: [middle])
+            check(free.width * free.height < 0.4 * usable.width * usable.height, "free: mid-screen float → too small (\(free))")
+
+            // Everything covered → zero.
+            check(LayoutEngine.freeArea(in: usable, avoiding: [usable]) == .zero, "free: fully covered → zero")
+        }
+
         // A gap larger than the area leaves no room: produce nothing rather than negative sizes.
         check(LayoutEngine.frames(count: 4, in: CGRect(x: 0, y: 0, width: 20, height: 20), gap: 30).isEmpty,
               "oversized gap should produce no frames")
