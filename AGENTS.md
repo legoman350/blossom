@@ -89,6 +89,8 @@ Resources/
 Tools/
   MakeIcon.swift         Draws the app icon: swift Tools/MakeIcon.swift <out.png>
   gen-xcodeproj.py       Regenerates Blossom.xcodeproj
+  ReadmeImages/main.swift Draws docs/images (banner + diagrams) from LayoutEngine
+docs/images/             README images
 Blossom.xcodeproj        App target + LayoutEngineTests tool target
 build.sh
 ```

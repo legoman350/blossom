@@ -1,5 +1,7 @@
 # Blossom
 
+![Blossom: tile, snap and tuck your Mac's windows from the menu bar](docs/images/banner.png)
+
 A macOS menu bar utility with two jobs:
 
 - **Tile** — one hotkey tiles every window on the current desktop into a grid; press
@@ -86,6 +88,8 @@ Windows mode and *Reset learned window sizes*.
 
 ## Snapping
 
+![Snap positions and their default hotkeys](docs/images/snapping.png)
+
 Move the window you're working in to part of its screen. The Snap Window menu has the
 same positions. Change any shortcut under **Settings → Snapping**.
 
@@ -110,6 +114,8 @@ If another window manager already uses these keys, Settings shows them as taken.
 others, or quit the other app.
 
 ## Tiling
+
+![The three tiling layouts: Grid, Master + Stack, Columns](docs/images/layouts.png)
 
 | Action | Result |
 | --- | --- |
