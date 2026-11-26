@@ -274,6 +274,18 @@ enum LayoutEngine {
         return free.max { $0.width * $0.height < $1.width * $1.height } ?? .zero
     }
 
+    /// Fill Empty Space: the frame that grows a window into the largest empty part of
+    /// `area`, the biggest rectangle no other window covers. Inset by the gap on every side,
+    /// so it sits one gap from the screen edges and from its neighbors, like a tiled cell.
+    /// nil if the other windows leave no useful room.
+    static func fillFrame(in area: CGRect, avoiding others: [CGRect], gap rawGap: CGFloat) -> CGRect? {
+        let free = freeArea(in: area, avoiding: others)
+        let gap = max(0, rawGap)
+        let inner = free.insetBy(dx: gap, dy: gap)
+        guard free.width > 0, !inner.isNull, inner.width > 0, inner.height > 0 else { return nil }
+        return snapped(left: inner.minX, top: inner.minY, right: inner.maxX, bottom: inner.maxY)
+    }
+
     // MARK: Internals
 
     private struct Candidate {

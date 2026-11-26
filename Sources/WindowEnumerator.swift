@@ -14,8 +14,9 @@ struct TileableWindow {
 }
 
 enum WindowEnumerator {
-    /// Tileable windows on the current desktop, frontmost first.
-    static func tileableWindows() -> [TileableWindow] {
+    /// Tileable windows on the current desktop, frontmost first. `includeUnmovable` also
+    /// returns windows that refuse to move, for callers that only need to know where windows are.
+    static func tileableWindows(includeUnmovable: Bool = false) -> [TileableWindow] {
         // The on-screen list is effectively "windows on the active desktop". Owner pid,
         // bounds and layer need no permission; titles would need Screen Recording, so we
         // never read them.
@@ -42,7 +43,7 @@ enum WindowEnumerator {
 
             if AX.isFullScreen(match.element) { continue }  // full-screen windows can't be resized
             // A window that can't even move is useless to tile. Skip it rather than leave a hole.
-            guard AX.isSettable(match.element, kAXPositionAttribute) else { continue }
+            guard includeUnmovable || AX.isSettable(match.element, kAXPositionAttribute) else { continue }
             result.append(TileableWindow(element: match.element, pid: pid, bundleID: app.bundleIdentifier,
                                          frame: match.frame,
                                          canResize: AX.isSettable(match.element, kAXSizeAttribute)))

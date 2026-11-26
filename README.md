@@ -101,10 +101,15 @@ same positions. Change any shortcut under **Settings → Snapping**.
 | Two thirds: press again to toggle left ⇄ right | ⌃⌥E |
 | Maximize | ⌃⌥↩ |
 | Center: first press keeps the size, then cycles centered ⅔ → ½ width | ⌃⌥C |
+| Fill Empty Space: grow into the largest area no other window covers | ⌃⌥Z |
 
 Turn on *After snapping a window, tile the other windows* (Settings → Snapping) and a
 snap also tiles everything else into the space left. Snap to the left half and the rest
 fills the right. This doesn't happen after Maximize or Center.
+
+**Fill Empty Space** is the opposite of Tile Others: the other windows stay where they are and
+the focused window, floating ones included, moves into the largest empty rectangle between them, one gap from each
+edge. If no gap of at least 200 × 200 pt is left, it beeps. Its shortcut is under Settings → Hotkeys.
 
 **Top / Bottom half** change only the height. The window keeps its position and width, so a
 left-third window becomes the top-left third. Press ⌃⌥↑ or ⌃⌥↓ again to stretch it to full height,

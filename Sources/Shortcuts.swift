@@ -73,6 +73,7 @@ struct Shortcut: Equatable {
 /// Everything a hotkey can trigger.
 enum HotkeyAction: String, CaseIterable {
     case tile, tileOthers, tuckAll, nextLayout, forgetLayout
+    case fillSpace  // grow the focused window into the largest empty space
     // Snap the focused window. Raw values are the persisted keys; don't rename them.
     case snapLeftHalf = "snap.leftHalf", snapRightHalf = "snap.rightHalf"
     case snapTopHalf = "snap.topHalf", snapBottomHalf = "snap.bottomHalf"
@@ -116,6 +117,7 @@ enum HotkeyAction: String, CaseIterable {
         case .tuckAll:      return "Tuck All / Show All"
         case .nextLayout:   return "Next Layout"
         case .forgetLayout: return "Forget Saved Layout"
+        case .fillSpace:    return "Fill Empty Space"
         case .snapTopHalf:    return "Top Half (again: full height)"
         case .snapBottomHalf: return "Bottom Half (again: full height)"
         case .snapCenter:     return "Center (again: resize)"
@@ -137,6 +139,7 @@ enum HotkeyAction: String, CaseIterable {
         case .tuckAll:            return key(kVK_ANSI_H, "H", base)
         case .nextLayout:         return key(kVK_ANSI_N, "N", base)
         case .forgetLayout:       return nil
+        case .fillSpace:          return key(kVK_ANSI_Z, "Z", base)
         case .snapLeftHalf:       return key(kVK_LeftArrow, "←", base)
         case .snapRightHalf:      return key(kVK_RightArrow, "→", base)
         case .snapTopHalf:        return key(kVK_UpArrow, "↑", base)

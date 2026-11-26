@@ -92,4 +92,54 @@ enum Snap {
         }
         return position
     }
+
+    /// Fill Empty Space: grow the focused window into the largest empty part of its screen,
+    /// the biggest rectangle no other window on this desktop covers. Every visible window
+    /// counts, floating ones too, and the focused window may itself be floating (nothing
+    /// here filters floats out). Beeps if there's no room left.
+    static func fillEmptySpace() {
+        guard Permissions.isTrusted(prompt: true) else { return }
+        guard let window = AX.focusedWindow(), let frame = AX.frame(of: window), !AX.isFullScreen(window),
+              let screen = Geometry.screen(containing: frame) ?? NSScreen.main else {
+            NSSound.beep()
+            return
+        }
+        let screenRect = Geometry.axRect(fromCocoa: screen.frame)
+        let area = Geometry.axRect(fromCocoa: screen.visibleFrame)
+        // tileableWindows skips windows that can't move, but those still take up space, so
+        // ask for every on-screen window here.
+        let others = WindowEnumerator.tileableWindows(includeUnmovable: true)
+            .filter { !CFEqual($0.element, window) && screenRect.intersects($0.frame) }
+            .map(\.frame)
+        guard let target = LayoutEngine.fillFrame(in: area, avoiding: others, gap: Tiler.gap),
+              let actual = AX.setFrame(window, target) else {
+            NSSound.beep()
+            return
+        }
+        if actual.width < target.width - 1 || actual.height < target.height - 1 {
+            AX.setPosition(window, CGPoint(x: (target.midX - actual.width / 2).rounded(),
+                                           y: (target.midY - actual.height / 2).rounded()))
+        }
+    }
+
+    /// Menu icon for Fill Empty Space: another window on the left, ours filling the rest.
+    static func fillIcon(size: NSSize = NSSize(width: 20, height: 14), template: Bool = true) -> NSImage {
+        let image = NSImage(size: size, flipped: true) { bounds in
+            let color: NSColor = template ? .black : .labelColor
+            let screen = bounds.insetBy(dx: 0.5, dy: 0.5)
+            color.setStroke()
+            NSBezierPath(roundedRect: screen, xRadius: 2, yRadius: 2).stroke()
+            let inner = screen.insetBy(dx: 2, dy: 2)
+            let split = inner.minX + inner.width * 0.4
+            let other = NSRect(x: inner.minX + 0.5, y: inner.minY + 0.5, width: split - inner.minX - 1.5, height: inner.height * 0.6)
+            NSBezierPath(roundedRect: other, xRadius: 1, yRadius: 1).stroke()
+            color.setFill()
+            NSBezierPath(roundedRect: NSRect(x: split + 0.5, y: inner.minY, width: inner.maxX - split - 0.5, height: inner.height),
+                         xRadius: 1, yRadius: 1).fill()
+            return true
+        }
+        image.isTemplate = template
+        image.accessibilityDescription = "Fill Empty Space"
+        return image
+    }
 }

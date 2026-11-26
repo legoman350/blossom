@@ -204,6 +204,12 @@ struct LayoutEngineTests {
 
             // Everything covered → zero.
             check(LayoutEngine.freeArea(in: usable, avoiding: [usable]) == .zero, "free: fully covered → zero")
+
+            // Fill Empty Space: the free area, one gap in from everything around it.
+            check(LayoutEngine.fillFrame(in: usable, avoiding: [right], gap: 8) == CGRect(x: 8, y: 33, width: 1024, height: 859),
+                  "fill: left of a right-docked window → \(String(describing: LayoutEngine.fillFrame(in: usable, avoiding: [right], gap: 8)))")
+            check(LayoutEngine.fillFrame(in: usable, avoiding: [], gap: 8) == usable.insetBy(dx: 8, dy: 8), "fill: empty screen → maximize")
+            check(LayoutEngine.fillFrame(in: usable, avoiding: [usable], gap: 8) == nil, "fill: no room → nil")
         }
 
         // Snap positions.

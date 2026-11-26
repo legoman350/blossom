@@ -54,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hotkeys.setHandler(for: .tuckAll) { [weak self] in self?.tuck.toggleAll() }
         hotkeys.setHandler(for: .nextLayout) { [weak self] in self?.nextLayout() }
         hotkeys.setHandler(for: .forgetLayout) { [weak self] in self?.tiler.forgetSnapshot() }
+        hotkeys.setHandler(for: .fillSpace) { Snap.fillEmptySpace() }
         for action in HotkeyAction.snapping {
             guard let positions = action.snapPositions else { continue }
             hotkeys.setHandler(for: action) { [weak self] in
@@ -169,7 +170,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 submenu.addItem(item)
             }
         }
+        submenu.addItem(.separator())
+        let fill = NSMenuItem(title: "", action: #selector(fillFromMenu), keyEquivalent: "")
+        fill.attributedTitle = titled(HotkeyAction.fillSpace.title, .fillSpace, icon: Snap.fillIcon(template: false))
+        fill.target = self
+        submenu.addItem(fill)
     }
+
+    @objc private func fillFromMenu() { Snap.fillEmptySpace() }
 
     @objc private func snapFromMenu(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let position = SnapPosition(rawValue: raw) else { return }
