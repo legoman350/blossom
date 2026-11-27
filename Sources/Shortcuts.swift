@@ -92,23 +92,24 @@ enum HotkeyAction: String, CaseIterable {
         // Pressing the top/bottom key again stretches the window to full height.
         case .snapTopHalf:    return [.topHalf, .stretchVertical]
         case .snapBottomHalf: return [.bottomHalf, .stretchVertical]
-        // First press centers at the current size; further presses resize, still centered.
-        case .snapCenter:     return [.center, .centerTwoThirds, .centerHalf]
         default:
             guard rawValue.hasPrefix("snap.") else { return nil }
             return SnapPosition(rawValue: String(rawValue.dropFirst("snap.".count))).map { [$0] }
         }
     }
 
-    /// The action whose hotkey reaches `position`: its own single-position action if it
-    /// has one, otherwise the cycle it belongs to.
-    static func covering(_ position: SnapPosition) -> HotkeyAction? {
-        allCases.first { $0.snapPositions?.first == position && $0.snapPositions?.count == 1 }
-            ?? allCases.first { $0.snapPositions?.contains(position) == true }
-    }
+    /// Snapping actions in display order, grouped like the screen: halves, corners, thirds,
+    /// then whole-window moves. The Snap Window menu and Settings → Snapping are both built
+    /// from this list, so they always show the same items in the same order.
+    static let snapGroups: [[HotkeyAction]] = [
+        [.snapLeftHalf, .snapRightHalf, .snapTopHalf, .snapBottomHalf],
+        [.snapTopLeft, .snapTopRight, .snapBottomLeft, .snapBottomRight],
+        [.snapThirds, .snapTwoThirds],
+        [.snapMaximize, .snapCenter, .fillSpace],
+    ]
 
-    static var general: [HotkeyAction] { allCases.filter { $0.snapPositions == nil } }
-    static var snapping: [HotkeyAction] { allCases.filter { $0.snapPositions != nil } }
+    static var snapping: [HotkeyAction] { snapGroups.flatMap { $0 } }
+    static var general: [HotkeyAction] { allCases.filter { !snapping.contains($0) } }
 
     var title: String {
         switch self {
@@ -118,11 +119,9 @@ enum HotkeyAction: String, CaseIterable {
         case .nextLayout:   return "Next Layout"
         case .forgetLayout: return "Forget Saved Layout"
         case .fillSpace:    return "Fill Empty Space"
-        case .snapTopHalf:    return "Top Half (again: full height)"
-        case .snapBottomHalf: return "Bottom Half (again: full height)"
-        case .snapCenter:     return "Center (again: resize)"
-        case .snapThirds:    return "Thirds (press to cycle)"
-        case .snapTwoThirds: return "Two Thirds (press to cycle)"
+        case .snapMaximize:  return "Maximize / Restore"
+        case .snapThirds:    return "Thirds"
+        case .snapTwoThirds: return "Two Thirds"
         default:            return snapPositions?.first?.title ?? rawValue
         }
     }

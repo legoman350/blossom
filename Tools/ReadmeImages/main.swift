@@ -122,7 +122,7 @@ render("layouts", NSSize(width: 960, height: 280)) { bounds in
 render("snapping", NSSize(width: 960, height: 400)) { bounds in
     let positions: [(SnapPosition, String)] = [
         (.leftHalf, "⌃⌥←"), (.rightHalf, "⌃⌥→"), (.topLeft, "⌃⌥U"), (.bottomRight, "⌃⌥K"), (.maximize, "⌃⌥↩"),
-        (.firstThird, "⌃⌥D"), (.centerThird, "⌃⌥D again"), (.lastTwoThirds, "⌃⌥E ×2"), (.centerTwoThirds, "⌃⌥C ×2"), (.centerHalf, "⌃⌥C ×3"),
+        (.firstThird, "⌃⌥D"), (.centerThird, "⌃⌥D again"), (.lastTwoThirds, "⌃⌥E ×2"), (.center, "⌃⌥C"), (.topRight, "⌃⌥I"),
     ]
     let cols = 5, w: CGFloat = 170, h: CGFloat = 110, spacingX: CGFloat = 17.5, rowH: CGFloat = 190
     for (i, (position, keys)) in positions.enumerated() {

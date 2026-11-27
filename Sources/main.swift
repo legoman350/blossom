@@ -54,13 +54,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hotkeys.setHandler(for: .tuckAll) { [weak self] in self?.tuck.toggleAll() }
         hotkeys.setHandler(for: .nextLayout) { [weak self] in self?.nextLayout() }
         hotkeys.setHandler(for: .forgetLayout) { [weak self] in self?.tiler.forgetSnapshot() }
-        hotkeys.setHandler(for: .fillSpace) { Snap.fillEmptySpace() }
         for action in HotkeyAction.snapping {
-            guard let positions = action.snapPositions else { continue }
-            hotkeys.setHandler(for: action) { [weak self] in
-                guard let self else { return }
-                self.afterSnap(Snap.focusedWindow(cycling: positions))
-            }
+            hotkeys.setHandler(for: action) { [weak self] in self?.performSnap(action) }
         }
         hotkeys.registerAll()
         tuck.start()
@@ -144,44 +139,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// Snap positions for the focused window, grouped like the screen: halves, corners,
-    /// thirds, then maximize/center. Clicking Blossom's menu doesn't activate Blossom, so
-    /// "focused window" is still the one you were working in.
+    /// One item per snapping action, in the same groups and order as Settings → Snapping
+    /// (`HotkeyAction.snapGroups`). Clicking an item does exactly what its hotkey does, so a
+    /// cycle (Thirds, Top Half…) advances on each click. Clicking Blossom's menu doesn't
+    /// activate Blossom, so "focused window" is still the one you were working in.
     private func rebuildSnapMenu() {
         guard let submenu = snapItem.submenu else { return }
         submenu.removeAllItems()
-        // Every position is listed for clicking. Thirds share one cycling hotkey, so that
-        // key shows on each of them.
-        let groups: [[SnapPosition]] = [
-            [.leftHalf, .rightHalf, .topHalf, .bottomHalf],
-            [.topLeft, .topRight, .bottomLeft, .bottomRight],
-            [.firstThird, .centerThird, .lastThird, .firstTwoThirds, .lastTwoThirds],
-            [.maximize, .center, .centerTwoThirds, .centerHalf],
-        ]
-        for (index, group) in groups.enumerated() {
+        for (index, group) in HotkeyAction.snapGroups.enumerated() {
             if index > 0 { submenu.addItem(.separator()) }
-            for position in group {
+            for action in group {
                 let item = NSMenuItem(title: "", action: #selector(snapFromMenu(_:)), keyEquivalent: "")
-                let icon = position.icon(template: false)
-                item.attributedTitle = HotkeyAction.covering(position).map { titled(position.title, $0, icon: icon) }
-                    ?? NSAttributedString(string: position.title)
+                item.attributedTitle = titled(action.title, action, icon: action.snapIcon(template: false))
                 item.target = self
-                item.representedObject = position.rawValue
+                item.representedObject = action.rawValue
                 submenu.addItem(item)
             }
         }
-        submenu.addItem(.separator())
-        let fill = NSMenuItem(title: "", action: #selector(fillFromMenu), keyEquivalent: "")
-        fill.attributedTitle = titled(HotkeyAction.fillSpace.title, .fillSpace, icon: Snap.fillIcon(template: false))
-        fill.target = self
-        submenu.addItem(fill)
     }
 
-    @objc private func fillFromMenu() { Snap.fillEmptySpace() }
-
     @objc private func snapFromMenu(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let position = SnapPosition(rawValue: raw) else { return }
-        afterSnap(Snap.focusedWindow(to: position))
+        guard let raw = sender.representedObject as? String, let action = HotkeyAction(rawValue: raw) else { return }
+        performSnap(action)
+    }
+
+    /// What a snapping hotkey or Snap Window item does.
+    private func performSnap(_ action: HotkeyAction) {
+        if action == .fillSpace {
+            Snap.fillEmptySpace()
+        } else if action == .snapMaximize {
+            afterSnap(Snap.toggleMaximize())
+        } else if let positions = action.snapPositions {
+            afterSnap(Snap.focusedWindow(cycling: positions))
+        }
     }
 
     /// With "auto tile others" on, a snap is followed by tiling the other windows into the

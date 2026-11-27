@@ -62,6 +62,36 @@ enum Snap {
         return focusedWindow(to: LayoutEngine.nextSnap(in: positions, window: frame, area: area, gap: Tiler.gap))
     }
 
+    /// Frames windows had before Maximize, so pressing Maximize again puts them back.
+    /// In memory only, one entry per window; closed windows just fail the restore.
+    private static var beforeMaximize: [(window: AXUIElement, frame: CGRect)] = []
+
+    /// Maximize, or, if the window is already maximized and Blossom maximized it, restore
+    /// its size and position from before. A window maximized some other way (or before a
+    /// Blossom restart) has nothing to go back to, so it stays put.
+    @discardableResult
+    static func toggleMaximize() -> SnapPosition? {
+        guard Permissions.isTrusted(prompt: true) else { return nil }
+        guard let window = AX.focusedWindow(), let frame = AX.frame(of: window), !AX.isFullScreen(window),
+              let screen = Geometry.screen(containing: frame) ?? NSScreen.main else {
+            NSSound.beep()
+            return nil
+        }
+        let area = Geometry.axRect(fromCocoa: screen.visibleFrame)
+        let saved = beforeMaximize.firstIndex { CFEqual($0.window, window) }
+        if LayoutEngine.isAt(.maximize, window: frame, area: area, gap: Tiler.gap) {
+            guard let saved else {
+                NSSound.beep()
+                return nil
+            }
+            AX.setFrame(window, beforeMaximize.remove(at: saved).frame)
+            return nil
+        }
+        if let saved { beforeMaximize.remove(at: saved) }
+        beforeMaximize.append((window, frame))
+        return focusedWindow(to: .maximize)
+    }
+
     /// Returns `position` if the window moved, nil otherwise.
     @discardableResult
     static func focusedWindow(to position: SnapPosition) -> SnapPosition? {
@@ -141,5 +171,14 @@ enum Snap {
         image.isTemplate = template
         image.accessibilityDescription = "Fill Empty Space"
         return image
+    }
+}
+
+extension HotkeyAction {
+    /// The picture for a snapping action, the same in the Snap Window menu and Settings.
+    /// A cycle shows its first position.
+    func snapIcon(size: NSSize = NSSize(width: 20, height: 14), template: Bool = true) -> NSImage? {
+        if self == .fillSpace { return Snap.fillIcon(size: size, template: template) }
+        return snapPositions?.first?.icon(size: size, template: template)
     }
 }

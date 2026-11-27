@@ -90,8 +90,9 @@ Windows mode and *Reset learned window sizes*.
 
 ![Snap positions and their default hotkeys](docs/images/snapping.png)
 
-Move the window you're working in to part of its screen. The Snap Window menu has the
-same positions. Change any shortcut under **Settings → Snapping**.
+Move the window you're working in to part of its screen. The Snap Window menu and
+**Settings → Snapping** list the same actions in the same order; clicking a menu item does what
+its hotkey does. Change any shortcut in Settings.
 
 | Position | Default |
 | --- | --- |
@@ -99,8 +100,8 @@ same positions. Change any shortcut under **Settings → Snapping**.
 | Top-left / Top-right / Bottom-left / Bottom-right | ⌃⌥U ⌃⌥I ⌃⌥J ⌃⌥K |
 | Thirds: press again to cycle left → center → right | ⌃⌥D |
 | Two thirds: press again to toggle left ⇄ right | ⌃⌥E |
-| Maximize | ⌃⌥↩ |
-| Center: first press keeps the size, then cycles centered ⅔ → ½ width | ⌃⌥C |
+| Maximize: press again to restore the original size and position | ⌃⌥↩ |
+| Center (keeps the size) | ⌃⌥C |
 | Fill Empty Space: grow into the largest area no other window covers | ⌃⌥Z |
 
 Turn on *After snapping a window, tile the other windows* (Settings → Snapping) and a

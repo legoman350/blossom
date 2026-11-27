@@ -207,7 +207,13 @@ final class SettingsWindowController: NSWindowController {
     }
 
     private func buildSnappingPage() -> NSView {
+        // Same groups and order as the Snap Window menu, with a little space between groups.
         let table = grid(hotkeyRows(HotkeyAction.snapping, status: snapStatus))
+        var row = 0
+        for group in HotkeyAction.snapGroups {
+            if row > 0 { table.row(at: row).topPadding = 10 }
+            row += group.count
+        }
         table.column(at: 0).xPlacement = .center   // icons
         table.column(at: 1).xPlacement = .leading  // names
         table.rowAlignment = .none                 // image views have no baseline; center rows instead
@@ -219,7 +225,7 @@ final class SettingsWindowController: NSWindowController {
         footer.orientation = .vertical
         footer.alignment = .leading
         footer.spacing = 6
-        return page(intro: "Move the window you're working in to part of its screen. Restore Defaults on the Hotkeys tab resets these too.",
+        return page(intro: "Move the window you're working in to part of its screen. The Snap Window menu has the same items. Thirds and Two Thirds move to the next position when pressed again; Top and Bottom Half stretch to full height; Maximize again restores the window's size. Restore Defaults on the Hotkeys tab resets these too.",
                     grid: scrolled(table, height: 270), footer: footer)
     }
 
@@ -248,9 +254,9 @@ final class SettingsWindowController: NSWindowController {
             let clear = NSButton(title: "Clear", target: self, action: #selector(clearShortcut(_:)))
             clear.bezelStyle = .rounded
             clear.identifier = NSUserInterfaceItemIdentifier(action.rawValue)
-            if let position = action.snapPositions?.first {
-                // Snap rows lead with a picture of the position: [icon, name, shortcut, Clear].
-                let icon = NSImageView(image: position.icon(size: NSSize(width: 26, height: 18)))
+            if HotkeyAction.snapping.contains(action), let image = action.snapIcon(size: NSSize(width: 26, height: 18)) {
+                // Snap rows lead with the same picture as the menu: [icon, name, shortcut, Clear].
+                let icon = NSImageView(image: image)
                 icon.contentTintColor = .labelColor
                 rows.append([icon, label(action.title), field, clear])
             } else {
@@ -486,7 +492,7 @@ final class SettingsWindowController: NSWindowController {
 
     @objc private func clearShortcut(_ sender: NSButton) {
         guard let raw = sender.identifier?.rawValue, let action = HotkeyAction(rawValue: raw) else { return }
-        apply(nil, to: action, status: action.snapPositions == nil ? hotkeyStatus : snapStatus)
+        apply(nil, to: action, status: HotkeyAction.snapping.contains(action) ? snapStatus : hotkeyStatus)
     }
 
     @objc private func modifiersChanged() {
