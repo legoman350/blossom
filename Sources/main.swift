@@ -167,8 +167,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func performSnap(_ action: HotkeyAction) {
         if action == .fillSpace {
             Snap.fillEmptySpace()
-        } else if action == .snapMaximize {
-            afterSnap(Snap.toggleMaximize())
+        } else if action == .snapMaximize || action == .snapCenter, let position = action.snapPositions?.first {
+            afterSnap(Snap.toggle(position))  // pressed again: back to where it was
         } else if let positions = action.snapPositions {
             afterSnap(Snap.focusedWindow(cycling: positions))
         }

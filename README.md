@@ -101,7 +101,7 @@ its hotkey does. Change any shortcut in Settings.
 | Thirds: press again to cycle left → center → right | ⌃⌥D |
 | Two thirds: press again to toggle left ⇄ right | ⌃⌥E |
 | Maximize: press again to restore the original size and position | ⌃⌥↩ |
-| Center (keeps the size) | ⌃⌥C |
+| Center (keeps the size): press again to move it back | ⌃⌥C |
 | Fill Empty Space: grow into the largest area no other window covers | ⌃⌥Z |
 
 Turn on *After snapping a window, tile the other windows* (Settings → Snapping) and a

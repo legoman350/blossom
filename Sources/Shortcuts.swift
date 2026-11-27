@@ -120,6 +120,7 @@ enum HotkeyAction: String, CaseIterable {
         case .forgetLayout: return "Forget Saved Layout"
         case .fillSpace:    return "Fill Empty Space"
         case .snapMaximize:  return "Maximize / Restore"
+        case .snapCenter:    return "Center / Restore"
         case .snapThirds:    return "Thirds"
         case .snapTwoThirds: return "Two Thirds"
         default:            return snapPositions?.first?.title ?? rawValue

@@ -225,7 +225,7 @@ final class SettingsWindowController: NSWindowController {
         footer.orientation = .vertical
         footer.alignment = .leading
         footer.spacing = 6
-        return page(intro: "Move the window you're working in to part of its screen. The Snap Window menu has the same items. Thirds and Two Thirds move to the next position when pressed again; Top and Bottom Half stretch to full height; Maximize again restores the window's size. Restore Defaults on the Hotkeys tab resets these too.",
+        return page(intro: "Move the window you're working in to part of its screen. The Snap Window menu has the same items. Thirds and Two Thirds move to the next position when pressed again; Top and Bottom Half stretch to full height; Maximize or Center again puts the window back where it was. Restore Defaults on the Hotkeys tab resets these too.",
                     grid: scrolled(table, height: 270), footer: footer)
     }
 
